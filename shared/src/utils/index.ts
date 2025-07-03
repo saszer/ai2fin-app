@@ -336,12 +336,16 @@ export const isErrorWithCode = (error: any, code: string): boolean => {
 };
 
 // ========================================
-// Local Storage Utilities
+// Local Storage Utilities (Browser Only)
 // ========================================
 
 export const safeLocalStorage = {
   get: (key: string, defaultValue: any = null): any => {
     try {
+      // Check if we're in a browser environment
+      if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return defaultValue;
+      }
       const item = localStorage.getItem(key);
       return item ? JSON.parse(item) : defaultValue;
     } catch {
@@ -351,6 +355,10 @@ export const safeLocalStorage = {
   
   set: (key: string, value: any): boolean => {
     try {
+      // Check if we're in a browser environment
+      if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return false;
+      }
       localStorage.setItem(key, JSON.stringify(value));
       return true;
     } catch {
@@ -360,6 +368,10 @@ export const safeLocalStorage = {
   
   remove: (key: string): boolean => {
     try {
+      // Check if we're in a browser environment
+      if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+        return false;
+      }
       localStorage.removeItem(key);
       return true;
     } catch {

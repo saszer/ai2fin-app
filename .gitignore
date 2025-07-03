@@ -1,106 +1,216 @@
-# Dependencies
+# ==================================
+# AI2 Enterprise Platform - Git Ignore
+# ==================================
+
+# ==================================
+# ENVIRONMENT & SECRETS
+# ==================================
+.env
+.env.*
+!.env.example
+!env.*.template
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+config/secrets/
+vault/
+
+# ==================================
+# NODE.JS
+# ==================================
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
+lerna-debug.log*
+.npm
+.eslintcache
+.node_repl_history
+*.tgz
+.yarn-integrity
+.pnp.*
 
-# Build outputs
+# ==================================
+# BUILD OUTPUTS
+# ==================================
 dist/
 build/
-*.tsbuildinfo
+coverage/
+*.min.js
+*.min.css
+.nyc_output/
+lib-cov/
 
-# Environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env.scale
-
-# Logs
-logs/
+# ==================================
+# DATABASES & STORAGE
+# ==================================
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+data/
+backups/
+dumps/
+uploads/
+temp/
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+logs/
 
-# Runtime data
+# ==================================
+# CLOUD & DEPLOYMENT
+# ==================================
+.aws/
+.gcp/
+.azure/
+terraform.tfstate*
+terraform.tfvars
+.terraform/
+docker-compose.override.yml
+Dockerfile.local
+k8s/secrets/
+helm/secrets/
+
+# ==================================
+# DEVELOPMENT TOOLS
+# ==================================
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ==================================
+# TESTING
+# ==================================
+test-results/
+cypress/videos/
+cypress/screenshots/
+.nyc_output/
+junit.xml
+coverage.xml
+
+# ==================================
+# MONITORING & LOGS
+# ==================================
+*.log
+logs/
+newrelic_agent.log
+.pm2/
 pids/
 *.pid
 *.seed
 *.pid.lock
 
-# Coverage directory used by tools like istanbul
-coverage/
-*.lcov
+# ==================================
+# SECURITY & COMPLIANCE
+# ==================================
+audit-reports/
+security-reports/
+compliance-reports/
+*.har
+*.trace
 
-# nyc test coverage
-.nyc_output
+# ==================================
+# CERTIFICATES & KEYS
+# ==================================
+ssl/
+certs/
+*.crt
+*.csr
+*.key
+*.pem
+*.p12
+*.pfx
 
-# Dependency directories
-jspm_packages/
+# ==================================
+# AI & ML MODELS
+# ==================================
+models/
+*.model
+*.pkl
+*.h5
+training-data/
+datasets/
 
-# TypeScript cache
-*.tsbuildinfo
-
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
-.eslintcache
-
-# Optional stylelint cache
-.stylelintcache
-
-# Microbundle cache
-.rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
-
-# Optional REPL history
-.node_repl_history
-
-# Output of 'npm pack'
-*.tgz
-
-# Yarn Integrity file
-.yarn-integrity
-
-# parcel-bundler cache (https://parceljs.org/)
-.cache
-.parcel-cache
-
-# Next.js build output
-.next
-
-# Nuxt.js build / generate output
-.nuxt
-dist
-
-# Gatsby files
+# ==================================
+# CACHE & TEMPORARY
+# ==================================
 .cache/
-public
-
-# Storybook build outputs
-.out
-.storybook-out
-
-# Temporary folders
+.tmp/
 tmp/
-temp/
+.sass-cache/
+.parcel-cache/
+.next/
+.nuxt/
+.vuepress/dist
 
-# Editor directories and files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# ==================================
+# PACKAGE MANAGERS
+# ==================================
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.pnpm-store/
 
-# OS generated files
+# ==================================
+# MICROSERVICES SPECIFIC
+# ==================================
+ai2-*/dist/
+ai2-*/build/
+ai2-*/logs/
+ai2-*/uploads/
+ai2-*/temp/
+ai2-*/.env
+ai2-*/.env.*
+ai2-*/node_modules/
+
+# ==================================
+# ENTERPRISE SPECIFIC
+# ==================================
+enterprise-config/
+production-config/
+staging-config/
+customer-data/
+analytics-data/
+reports/
+exports/
+
+# ==================================
+# THIRD-PARTY INTEGRATIONS
+# ==================================
+stripe-logs/
+twilio-logs/
+aws-logs/
+sendgrid-logs/
+
+# ==================================
+# PERFORMANCE & PROFILING
+# ==================================
+.clinic/
+*.cpuprofile
+*.heapprofile
+*.heapsnapshot
+flame-graphs/
+
+# ==================================
+# DOCUMENTATION BUILD
+# ==================================
+docs/build/
+docs/.vuepress/dist/
+_site/
+.jekyll-cache/
+
+# ==================================
+# OPERATING SYSTEM FILES
+# ==================================
 .DS_Store
 .DS_Store?
 ._*
@@ -108,58 +218,28 @@ temp/
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini
 
-# Database files
-*.db
-*.sqlite
-*.sqlite3
+# ==================================
+# RUNTIME FILES
+# ==================================
+*.pid
+*.seed
+*.pid.lock
+.lock-wscript
 
-# Upload directories
-uploads/
-public/uploads/
+# ==================================
+# EDITOR BACKUPS
+# ==================================
+*~
+*.swp
+*.swo
+.#*
+\#*#
+.emacs.desktop
+.emacs.desktop.lock
 
-# Docker
-.dockerignore
-
-# Test files
-test-*.csv
-test-*.html
-test-*.js
-
-# Documentation builds
-docs/build/
-
-# Package manager files
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
-
-# IDE files
-*.sublime-project
-*.sublime-workspace
-
-# Backup files
-*.bak
-*.backup
-*.old
-
-# Archive files
-*.zip
-*.tar.gz
-*.rar
-
-# Certificate files
-*.pem
-*.key
-*.crt
-
-# Configuration files with secrets
-config/secrets.json
-config/production.json
-
-# Monitoring and profiling
-*.cpuprofile
-*.heapsnapshot
-
-# Local development
-.local/ 
+# ==================================
+# CUSTOM PROJECT EXCLUSIONS
+# ==================================
+# Add project-specific patterns here 

@@ -1,38 +1,30 @@
 {
   "name": "ai2-enterprise-platform",
   "version": "2.0.0",
-  "description": "AI2 Enterprise Financial Platform - Modular, Scalable SaaS Architecture",
+  "description": "AI2 Enterprise Platform - Modular Financial Management System",
   "private": true,
-  "workspaces": [
-    "ai2-core-app",
-    "ai2-ai-modules", 
-    "ai2-subscription-service",
-    "ai2-connectors",
-    "ai2-analytics",
-    "ai2-notifications",
-    "shared"
-  ],
   "scripts": {
+    "postinstall": "npm run build:shared",
     "build:all": "npm run build:shared && npm run build:modules && npm run build:core",
     "build:shared": "cd shared && npm run build",
     "build:core": "cd ai2-core-app && npm run build",
     "build:modules": "npm run build:ai && npm run build:subscription && npm run build:connectors && npm run build:analytics && npm run build:notifications",
     "build:ai": "cd ai2-ai-modules && npm run build",
     "build:subscription": "cd ai2-subscription-service && npm run build",
-    "build:connectors": "cd ai2-connectors && npm run build", 
+    "build:connectors": "cd ai2-connectors && npm run build",
     "build:analytics": "cd ai2-analytics && npm run build",
     "build:notifications": "cd ai2-notifications && npm run build",
-    "start:all": "concurrently \"npm run start:core:cluster\" \"npm run start:services\"",
-    "start:core": "cd ai2-core-app && npm run start:cluster",
+    "start:all": "concurrently \"npm run start:core\" \"npm run start:services\"",
+    "start:core": "cd ai2-core-app && npm start",
     "start:core:standalone": "cross-env ENABLE_AI=false ENABLE_SUBSCRIPTION=false ENABLE_ANALYTICS=false ENABLE_CONNECTORS=false ENABLE_NOTIFICATIONS=false npm run start:core",
-    "start:core:cluster": "cd ai2-core-app && npm run start:cluster",
     "start:services": "concurrently \"npm run start:subscription\" \"npm run start:ai\" \"npm run start:connectors\" \"npm run start:analytics\" \"npm run start:notifications\"",
-    "start:subscription": "cd ai2-subscription-service && npm run dev:gateway",
-    "start:ai": "cd ai2-ai-modules && npm run start", 
+    "start:subscription": "cd ai2-subscription-service && npm start",
+    "start:ai": "cd ai2-ai-modules && npm run start",
     "start:connectors": "cd ai2-connectors && npm run start",
     "start:analytics": "cd ai2-analytics && npm run start",
     "start:notifications": "cd ai2-notifications && npm run start",
     "start:premium": "cross-env ENABLE_AI=true ENABLE_SUBSCRIPTION=true ENABLE_ANALYTICS=true ENABLE_CONNECTORS=true ENABLE_NOTIFICATIONS=true npm run start:all",
+    "start:enterprise": "cross-env SCALING_PHASE=enterprise CLUSTER_MODE=true CLUSTER_WORKERS=8 ENABLE_AI=true ENABLE_SUBSCRIPTION=true ENABLE_ANALYTICS=true ENABLE_CONNECTORS=true ENABLE_NOTIFICATIONS=true ENABLE_MULTI_TENANT=true npm run start:all",
     "test:all": "npm run test:shared && npm run test:core && npm run test:modules",
     "test:shared": "cd shared && npm test",
     "test:core": "cd ai2-core-app && npm test",
@@ -40,7 +32,7 @@
     "test:ai": "cd ai2-ai-modules && npm test",
     "test:subscription": "cd ai2-subscription-service && npm test",
     "test:connectors": "cd ai2-connectors && npm test",
-    "test:analytics": "cd ai2-analytics && npm test", 
+    "test:analytics": "cd ai2-analytics && npm test",
     "test:notifications": "cd ai2-notifications && npm test",
     "lint:all": "concurrently \"npm run lint:shared\" \"npm run lint:core\" \"npm run lint:modules\"",
     "lint:shared": "cd shared && npm run lint",
@@ -54,76 +46,41 @@
     "health:check": "node scripts/health-check-all.js",
     "clean:all": "npm run clean:shared && npm run clean:core && npm run clean:modules",
     "clean:shared": "cd shared && npm run clean",
-    "clean:core": "cd ai2-core-app && npm run clean", 
+    "clean:core": "cd ai2-core-app && npm run clean",
     "clean:modules": "concurrently \"npm run clean:ai\" \"npm run clean:subscription\" \"npm run clean:connectors\" \"npm run clean:analytics\" \"npm run clean:notifications\"",
     "clean:ai": "cd ai2-ai-modules && npm run clean",
     "clean:subscription": "cd ai2-subscription-service && npm run clean",
     "clean:connectors": "cd ai2-connectors && npm run clean",
     "clean:analytics": "cd ai2-analytics && npm run clean",
     "clean:notifications": "cd ai2-notifications && npm run clean",
-    "setup:all": "npm install && npm run build:all",
-    "postinstall": "npm run build:shared"
+    "setup:all": "npm install && npm run build:all"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
-    "cross-env": "^7.0.3",
-    "lerna": "^8.0.0",
-    "typescript": "^5.3.3",
-    "@types/node": "^20.10.0"
+    "cross-env": "^7.0.3"
   },
+  "workspaces": [
+    "shared",
+    "ai2-core-app",
+    "ai2-ai-modules",
+    "ai2-connectors",
+    "ai2-analytics",
+    "ai2-notifications",
+    "ai2-subscription-service"
+  ],
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
   },
   "keywords": [
-    "financial",
     "ai",
-    "saas", 
+    "financial-management",
     "enterprise",
-    "monorepo",
-    "scalable",
-    "modular"
+    "microservices",
+    "transaction-analysis",
+    "tax-deduction",
+    "subscription-billing"
   ],
-  "author": "AI2 Enterprise Team",
-  "license": "PROPRIETARY",
-  "ai2": {
-    "modules": {
-      "core": {
-        "required": true,
-        "standalone": true,
-        "description": "Core financial management platform"
-      },
-      "ai": {
-        "required": false,
-        "premium": true,
-        "description": "AI-powered financial insights and automation"
-      },
-      "subscription": {
-        "required": false,
-        "monetization": true,
-        "description": "Subscription billing and user management"
-      },
-      "connectors": {
-        "required": false,
-        "enterprise": true,
-        "description": "Bank and email integrations"
-      },
-      "analytics": {
-        "required": false,
-        "premium": true,
-        "description": "Advanced analytics and reporting"
-      },
-      "notifications": {
-        "required": false,
-        "addon": true,
-        "description": "Multi-channel notification system"
-      }
-    },
-    "deployment": {
-      "cluster": true,
-      "containers": true,
-      "kubernetes": true,
-      "scalability": "millions"
-    }
-  }
-} 
+  "author": "AI2 Enterprise Platform Team",
+  "license": "MIT"
+}

@@ -274,11 +274,15 @@ const isErrorWithCode = (error, code) => {
 };
 exports.isErrorWithCode = isErrorWithCode;
 // ========================================
-// Local Storage Utilities
+// Local Storage Utilities (Browser Only)
 // ========================================
 exports.safeLocalStorage = {
     get: (key, defaultValue = null) => {
         try {
+            // Check if we're in a browser environment
+            if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+                return defaultValue;
+            }
             const item = localStorage.getItem(key);
             return item ? JSON.parse(item) : defaultValue;
         }
@@ -288,6 +292,10 @@ exports.safeLocalStorage = {
     },
     set: (key, value) => {
         try {
+            // Check if we're in a browser environment
+            if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+                return false;
+            }
             localStorage.setItem(key, JSON.stringify(value));
             return true;
         }
@@ -297,6 +305,10 @@ exports.safeLocalStorage = {
     },
     remove: (key) => {
         try {
+            // Check if we're in a browser environment
+            if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+                return false;
+            }
             localStorage.removeItem(key);
             return true;
         }
