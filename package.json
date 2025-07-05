@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "postinstall": "npm run build:shared",
+    "start": "npm run start:core:standalone",
     "build:all": "npm run build:shared && npm run build:modules && npm run build:core",
     "build:shared": "cd shared && npm run build",
     "build:core": "cd ai2-core-app && npm run build",
@@ -82,5 +83,8 @@
     "subscription-billing"
   ],
   "author": "AI2 Enterprise Platform Team",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^6.11.1"
+  }
 }

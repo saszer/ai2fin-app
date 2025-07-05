@@ -1,0 +1,70 @@
+---
+description:I need you to behave like a senior backend engineer with full awareness of codebase structure and architecture integrity.
+
+You're working on a full-stack, modular system with the following structure:
+
+- `ai2/` (the core app, currently semi-monolithic)
+- `ai2-ai-modules/`, `ai2-connectors/`, `ai2-analytics/`, `ai2-subscription-service/` (intended microservices or feature modules)
+- `src-old/` contains actual business logic (AI, banking, bills, expenses, etc.)
+- `src/` only has mock endpoints and basic routing
+- Some endpoints are stubbed with `TODO`, `mock`, or `placeholder` handlers
+
+Going forward, please follow these rules:
+
+You are helping build a scalable modular system.
+
+The core app is in `ai2/`. It must remain completely functional on its own and work independently.
+
+We want to allow optional integrations with external modules such as:
+- `ai2-subscription-service`
+- `ai2-analytics`
+- `ai2-overlays`
+
+These modules are in separate folders and repos. They should **not be required** for `ai2` to run.
+
+🔧 Your job is to:
+1. Set up a service discovery system or dynamic connector inside `ai2/src/modules/` that:
+   - Pings each known optional service at boot or on-demand
+   - Stores availability info in a `servicesStatus` object
+   - Provides hooks or utilities to access those services (only if they are available)
+
+2. In the frontend (`ai2/src/frontend/`):
+   - Show or hide UI components based on which modules are available (e.g., show subscription status only if service is online)
+   - Ensure fallback UI exists for when modules are offline
+
+3. Do not tightly couple logic.
+   - No hard imports from external modules
+   - Only connect via REST, WebSocket,
+
+
+1. **DO NOT CREATE DUPLICATE LOGIC.**
+   - Always check if a function, route, or handler already exists elsewhere (especially in `src-old/` or other modules).
+   - If functionality already exists, extend or refactor it — do not duplicate or recreate it in a new file.
+
+2. **FINISH THE ENTIRE FLOW.**
+   - Never leave mock handlers, empty controllers, or TODO endpoints unless explicitly asked.
+   - Complete all the required steps for any new feature: route ➝ controller ➝ service ➝ DB ➝ test.
+
+3. **USE EXISTING MODULES CORRECTLY.**
+   - `ai2-connectors` should handle external data (bank/email APIs).
+   - `ai2-ai-modules` should handle AI-driven classification.
+   - `ai2-subscription-service` should manage user plans, usage, and payments.
+   - Core app (`ai2`) should act as an API gateway, routing logic to the correct microservice/module.
+
+4. **MIGRATE, DON’T IGNORE `src-old/`.**
+   - Identify all real logic in `src-old/` and move or refactor it into appropriate folders in `src/` or relevant modules.
+   - Do not let real business logic live in a deprecated folder.
+
+5. **CLEAN, TESTABLE, AND CONSISTENT OUTPUT.**
+   - All code must be testable and modular
+   - Use proper error handling (`try/catch`) and logging
+   - Remove mock data in favor of real logic, or clearly label it as `MOCK`
+
+6. **AFTER ANY CHANGE:**
+   - Summarize what you modified and where
+   - Confirm all services run smoothly (`npm start`, `npm run dev`, etc.)
+   - Verify app launches with no crashes, no mock leftovers, and real working endpoints
+
+globs:
+alwaysApply: false
+---

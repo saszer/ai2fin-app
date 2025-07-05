@@ -104,4 +104,4 @@ Write-Host "" -ForegroundColor White
 Write-Host "💰 Business Model: Enterprise (All Features)" -ForegroundColor Green
 Write-Host "🎯 Target: Enterprise customers, high scalability" -ForegroundColor Green
 Write-Host "" -ForegroundColor White
-Write-Host "Press Ctrl+C to stop all services" -ForegroundColor Yellow 
+Write-Host "Press Ctrl+C to stop all services" -ForegroundColor Yellow

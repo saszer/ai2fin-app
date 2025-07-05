@@ -8,8 +8,8 @@ const services = [
   { name: 'Core App', url: 'http://localhost:3001/health', emoji: '🏛️', required: true },
   { name: 'AI Modules', url: 'http://localhost:3002/health', emoji: '🤖', required: false },
   { name: 'Analytics', url: 'http://localhost:3004/health', emoji: '📊', required: false },
-  { name: 'Connectors', url: 'http://localhost:3005/health', emoji: '🔗', required: false },
-  { name: 'Notifications', url: 'http://localhost:3006/health', emoji: '🔔', required: false },
+  { name: 'Connectors', url: 'http://localhost:3003/health', emoji: '🔗', required: false },
+  { name: 'Notifications', url: 'http://localhost:3005/health', emoji: '🔔', required: false },
   { name: 'Subscription', url: 'http://localhost:3010/health', emoji: '💳', required: false },
 ];
 

@@ -13,10 +13,10 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "composite": true,
+    "composite": false,
     "baseUrl": ".",
     "paths": {
-      "@ai2/shared": ["../shared/src/index"]
+      "@ai2/shared": ["../shared/dist/index"]
     }
   },
   "include": [
