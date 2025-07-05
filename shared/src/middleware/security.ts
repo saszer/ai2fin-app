@@ -100,7 +100,7 @@ export const validateInput = (schema: Joi.ObjectSchema) => {
     });
 
     if (error) {
-      const validationErrors = error.details.map(detail => ({
+      const validationErrors = error.details.map((detail: any) => ({
         field: detail.path.join('.'),
         message: detail.message,
         type: detail.type
@@ -135,7 +135,7 @@ export const createRateLimit = (options: {
       error: options.message || 'Too many requests',
       code: 'RATE_LIMIT_EXCEEDED'
     },
-    keyGenerator: options.keyGenerator || ((req: Request) => req.ip),
+    keyGenerator: options.keyGenerator || ((req: Request) => req.ip || 'unknown'),
     standardHeaders: true,
     legacyHeaders: false,
   });
@@ -306,7 +306,7 @@ export const securityMiddlewareStack = [
 ];
 
 // Export individual middleware for custom configurations
-export {
+export type {
   AuthenticatedRequest,
   SecurityConfig
 };

@@ -331,7 +331,7 @@ export const validateRequest = (schema: Joi.ObjectSchema, data: any) => {
   });
 
   if (error) {
-    const details = error.details.map(detail => ({
+    const details = error.details.map((detail: any) => ({
       field: detail.path.join('.'),
       message: detail.message.replace(/"/g, ''),
       type: detail.type,
