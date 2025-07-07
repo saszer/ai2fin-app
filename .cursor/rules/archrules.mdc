@@ -1,0 +1,15 @@
+---
+description:
+D. Future-Proofing & Scalability
+If you add more upload endpoints (e.g., /api/bills/upload, /api/receipts/upload), just reuse uploadMiddleware.
+If you need different configs (e.g., different file size limits), export a factory function from upload.ts that takes options.
+E. Performance & Security
+Never buffer large files in memory unless necessary. Use useTempFiles: true for very large files and stream them.
+Validate file type and size in your route handler.
+Log only on real errors; avoid noisy logs for non-upload requests.
+F. Error Handling
+Use your centralized error handler for all upload errors.
+Return clear, actionable error messages to the frontend.
+globs:
+alwaysApply: true
+---
