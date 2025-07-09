@@ -28,7 +28,7 @@ These modules are in separate folders and repos. They should **not be required**
    - Stores availability info in a `servicesStatus` object
    - Provides hooks or utilities to access those services (only if they are available)
 
-2. In the frontend (`ai2/src/frontend/`):
+2. In the frontend 
    - Show or hide UI components based on which modules are available (e.g., show subscription status only if service is online)
    - Ensure fallback UI exists for when modules are offline
 
@@ -62,9 +62,8 @@ These modules are in separate folders and repos. They should **not be required**
 
 6. **AFTER ANY CHANGE:**
    - Summarize what you modified and where
-   - Confirm all services run smoothly (`npm start`, `npm run dev`, etc.)
    - Verify app launches with no crashes, no mock leftovers, and real working endpoints
 
 globs:
-alwaysApply: false
+alwaysApply: true
 ---
