@@ -1,0 +1,11 @@
+Transaction Date,Description,Debit Amount,Credit Amount,Transaction Type,Reference Number
+2024-01-15,Salary Deposit,,4500.00,credit,SAL-202401
+2024-01-16,Electricity Bill - AGL,185.50,,debit,ELC-202401
+2024-01-17,Woolworths Grocery,156.75,,debit,WOL-202401
+2024-01-18,Mortgage Payment - CBA,2200.00,,debit,MTG-202401
+2024-01-19,Netflix Subscription,17.99,,debit,NFX-202401
+2024-01-20,Coffee Shop,8.50,,debit,CFS-202401
+2024-01-21,Gas Bill - Origin,95.30,,debit,GAS-202401
+2024-01-22,Online Shopping - Amazon,234.56,,debit,AMZ-202401
+2024-01-23,Fuel - Shell,78.90,,debit,SHL-202401
+2024-01-24,Restaurant Dinner,145.00,,debit,RST-202401

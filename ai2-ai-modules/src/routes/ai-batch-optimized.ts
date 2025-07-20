@@ -151,7 +151,7 @@ router.post('/analyze-single', async (req: any, res: any) => {
  */
 router.post('/analyze-batch', async (req: any, res: any) => {
   try {
-    const { transactions, options, userProfile } = req.body;
+    const { transactions, selectedCategories, options, userProfile } = req.body;
 
     if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
       return res.status(400).json({
@@ -162,6 +162,8 @@ router.post('/analyze-batch', async (req: any, res: any) => {
     }
 
     console.log(`🚀 Starting optimized batch analysis for ${transactions.length} transactions`);
+    console.log(`🎯 Selected categories: ${selectedCategories?.join(', ') || 'None'}`);
+    console.log(`🔧 Categorization mode: ${options?.enableCategorization ? 'ENABLED' : 'Classification mode'}`);
 
     // Use initialized services
     if (!batchEngine || !referenceParser) {
@@ -184,6 +186,10 @@ router.post('/analyze-batch', async (req: any, res: any) => {
       userNotes: t.userNotes
     }));
 
+    // 🔍 DEBUG: Log incoming options
+    console.log('🔍 DEBUG - Incoming options:', JSON.stringify(options, null, 2));
+    console.log('🔍 DEBUG - Selected categories:', selectedCategories);
+    
     // Configure batch processing options
     const batchOptions: any = { // Assuming BatchProcessingOptions type is not directly imported here
       batchSize: options?.batchSize || 50,
@@ -191,12 +197,16 @@ router.post('/analyze-batch', async (req: any, res: any) => {
       confidenceThreshold: options?.confidenceThreshold || 0.8,
       enableBillDetection: options?.enableBillDetection ?? true,
       enableCostOptimization: options?.enableCostOptimization ?? true,
+      enableCategorization: options?.enableCategorization ?? false, // 🎯 New categorization mode
+      selectedCategories: selectedCategories || [], // 🎯 Pass selected categories
       userProfile: userProfile || {
         businessType: 'SOLE_TRADER',
         industry: 'Software Services',
         countryCode: 'AU'
       }
     };
+    
+    console.log('🔍 DEBUG - Final batchOptions:', JSON.stringify(batchOptions, null, 2));
 
     const result = await batchEngine.processBatch(batchTransactions, batchOptions);
 
