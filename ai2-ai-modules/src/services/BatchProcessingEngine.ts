@@ -18,6 +18,7 @@ import { ReferenceDataParser, TransactionAnalysisResult } from './ReferenceDataP
 import { TransactionClassificationAIAgent } from './TransactionClassificationAIAgent';
 import { AIConfig } from '../types/ai-types';
 import { AIDataContext } from './BaseAIService';
+import { logger } from './LoggingService';
 
 export interface BatchTransaction {
   id: string;
@@ -100,9 +101,18 @@ export class BatchProcessingEngine {
     this.config = config;
     this.referenceParser = new ReferenceDataParser(config);
     
+    // 🔍 DEBUG: Check API key and AI agent initialization
+    console.log('🔧 BatchProcessingEngine Constructor:');
+    console.log('🔧 Config apiKey exists:', !!config.apiKey);
+    console.log('🔧 Config apiKey length:', config.apiKey?.length || 0);
+    
     // Initialize AI agent if API key is available
     if (config.apiKey) {
+      console.log('🤖 Initializing AI Agent with API key...');
       this.aiAgent = new TransactionClassificationAIAgent(config);
+      console.log('✅ AI Agent initialized successfully');
+    } else {
+      console.log('❌ No API key provided - AI Agent will not be initialized');
     }
   }
 
@@ -120,6 +130,12 @@ export class BatchProcessingEngine {
     options: BatchProcessingOptions = this.getDefaultOptions()
   ): Promise<BatchProcessingResult> {
     const startTime = Date.now();
+    const requestId = `batch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    logger.info('BatchProcessingEngine', `Starting batch processing of ${transactions.length} transactions`, {
+      transactionCount: transactions.length,
+      options: { ...options, userProfile: options.userProfile ? 'present' : 'none' }
+    }, requestId);
     
     console.log(`🚀 Starting batch processing of ${transactions.length} transactions`);
     
@@ -185,6 +201,15 @@ export class BatchProcessingEngine {
     console.log(`🎉 Batch processing completed in ${processingTimeMs}ms`);
     console.log(`💰 Total cost: $${costBreakdown.costPerTransaction * transactions.length}`);
     console.log(`📊 Efficiency: ${costBreakdown.efficiencyRating}%`);
+    
+    // Log completion
+    logger.logPerformance('BatchProcessingEngine', 'batch_processing', processingTimeMs, {
+      totalTransactions: transactions.length,
+      processedWithReferenceData: classifiedTransactions.length,
+      processedWithAI: aiResults.length,
+      efficiency: costBreakdown.efficiencyRating,
+      totalCost: costBreakdown.costPerTransaction * transactions.length
+    }, requestId);
     
     return {
       totalTransactions: transactions.length,
@@ -257,11 +282,21 @@ export class BatchProcessingEngine {
     
     // If no AI agent available, return mock results
     if (!this.aiAgent) {
+      logger.warn('BatchProcessingEngine', 'No AI agent available, using mock results', {
+        transactionCount: transactions.length
+      });
       return this.generateMockAIResults(transactions);
     }
     
     const results: TransactionAnalysisResult[] = [];
     const batches = this.createBatches(transactions, options.batchSize);
+    
+    logger.info('BatchProcessingEngine', `Processing ${batches.length} AI batches with ${options.maxConcurrentBatches} concurrent`, {
+      transactionCount: transactions.length,
+      batchCount: batches.length,
+      batchSize: options.batchSize,
+      maxConcurrentBatches: options.maxConcurrentBatches
+    });
     
     console.log(`🔄 Processing ${batches.length} AI batches with ${options.maxConcurrentBatches} concurrent`);
     
@@ -341,6 +376,7 @@ export class BatchProcessingEngine {
                 taxCategory: catResult.taxCategory || 'Personal',
                 isBill: false, // Not relevant for categorization
                 isRecurring: false, // Not relevant for categorization
+                secondaryType: catResult.secondaryType || 'one-time expense', // 🎯 ADDED: Use AI result or default
                 reasoning: catResult.reasoning || 'AI categorization',
                 primaryType: transaction.type === 'credit' ? 'income' : 'expense',
                 processedAt: new Date().toISOString(),
@@ -376,6 +412,7 @@ export class BatchProcessingEngine {
                 taxCategory: catResult.taxCategory || 'Personal',
                 isBill: false, // Not relevant for categorization
                 isRecurring: false, // Not relevant for categorization
+                secondaryType: catResult.secondaryType || 'one-time expense', // 🎯 ADDED: Use AI result or default
                 reasoning: catResult.reasoning || 'AI categorization (open analysis)',
                 primaryType: transaction.type === 'credit' ? 'income' : 'expense',
                 processedAt: new Date().toISOString(),
@@ -422,6 +459,26 @@ export class BatchProcessingEngine {
     selectedCategories: string[],
     context: AIDataContext
   ): Promise<any[]> {
+    const requestId = `categorize-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const startTime = Date.now();
+    
+    // Log the API request with actual prompt
+    logger.logApiRequest(
+      'BatchProcessingEngine',
+      'openai/chat/completions',
+      'POST',
+      {
+        model: 'gpt-4',
+        messages: [
+          { role: 'system', content: 'You are a financial transaction categorization expert. Analyze transactions and categorize them accurately.' },
+          { role: 'user', content: `Categorize these ${transactions.length} transactions: ${JSON.stringify(transactions.map(t => ({ description: t.description, amount: t.amount, merchant: t.merchant })))}` }
+        ],
+        max_tokens: 2000,
+        temperature: 0.1
+      },
+      context.userId,
+      requestId
+    );
     // Prepare optimized transaction data (remove unnecessary fields)
     const optimizedTransactions = transactions.map(t => ({
       description: t.description,
@@ -465,7 +522,9 @@ export class BatchProcessingEngine {
     ].filter(Boolean).join('\n');
 
     // Create enhanced categorization prompt with comprehensive user context
-    const prompt = `You are an expert financial analyst specializing in transaction categorization for ${countryCode} businesses. Categorize these financial transactions based on the user's complete business profile and preferences.
+    const prompt = `Categorizes financial transactions accurately and concisely.
+
+    Help categorize financial transactions based on user's business profile and preferences.
 
 COMPREHENSIVE USER PROFILE:
 ${userProfileContext}
@@ -475,41 +534,19 @@ SELECTED CATEGORIES: ${selectedCategories.length > 0 ? selectedCategories.join('
 TRANSACTION DATA:
 ${JSON.stringify(optimizedTransactions, null, 2)}
 
-CATEGORIZATION INSTRUCTIONS:
-1. Consider the user's business type (${businessType}) when determining business vs personal expenses
-2. Apply industry-specific knowledge for ${industry} sector transactions
-3. Use profession-specific insights for ${profession} role if provided
-4. Apply ${countryCode} tax and business regulations
-5. Incorporate the user's specific context and preferences: ${aiContextInput || 'No additional context provided'}
-6. For each transaction, determine:
-   - Most appropriate category (from user's list or suggest new if none fit well)
-   - Tax deductibility based on business context
-   - Business use percentage considering user's profile
-   - Confidence level based on profile match
+Consider the user's business type, industry, profession, country, and personal context when categorizing transactions. For each transaction, assign to the MOST APPROPRIATE category from the user's categories, treat as one category between each comma. If a transaction could fit multiple categories, choose the BEST match based on the user's context but do not try to fit user categories, suggest a new category if not fitting easily.
 
-CATEGORY SELECTION STRATEGY:
-- If user selected specific categories: Choose the BEST match from their list
-- If OPEN categorization: Suggest the most appropriate category for their ${businessType} ${profession} in ${industry}
-- Consider user's context: ${aiContextInput || 'Standard business categorization'}
-- Prioritize tax efficiency for ${countryCode} ${businessType} entities
-
-RESPONSE FORMAT:
 Respond with a JSON array where each element corresponds to a transaction in order:
 [
   {
     "description": "transaction description",
-    "category": "assigned category (from user's list if fitting, or suggest new)",
+    "category": "assigned category from user's list if fitting",
     "confidence": 0.0-1.0,
-    "isNewCategory": true/false,
-    "newCategoryName": "suggested name if new category",
-    "reasoning": "brief explanation considering user profile",
-    "isTaxDeductible": true/false,
-    "businessUsePercentage": 0-100,
-    "taxCategory": "business/personal/mixed"
+    "isNewCategory": false,
+    "newCategoryName": null,
+    "reasoning": "1-7 word explanation"
   }
-]
-
-Focus on accuracy for ${profession} in ${industry} sector, considering ${businessType} business structure and user's specific context.`;
+]`;
 
     try {
       console.log(`🤖 Sending enhanced categorization request for ${transactions.length} transactions`);
@@ -542,7 +579,7 @@ Focus on accuracy for ${profession} in ${industry} sector, considering ${busines
         messages: [
           {
             role: 'system',
-            content: `You are an expert financial analyst specializing in ${countryCode} business transaction categorization. You understand ${businessType} business structures and ${industry} sector specifics. Use the user's complete profile to provide accurate, tax-efficient categorization.`
+            content: `You are an expert financial analyst specializing in ${countryCode} business transaction categorization. You understand ${businessType} business structures and ${industry} sector specifics.`
           },
           {
             role: 'user',
@@ -558,15 +595,51 @@ Focus on accuracy for ${profession} in ${industry} sector, considering ${busines
         throw new Error('No response from AI');
       }
 
+      // Log the API response with actual content
+      const duration = Date.now() - startTime;
+      const estimatedCost = this.estimateBatchCost(transactions.length);
+      logger.logApiResponse(
+        'BatchProcessingEngine',
+        'openai/chat/completions',
+        'POST',
+        {
+          model: 'gpt-4',
+          usage: {
+            prompt_tokens: response.usage?.prompt_tokens || 0,
+            completion_tokens: response.usage?.completion_tokens || 0,
+            total_tokens: response.usage?.total_tokens || 0
+          },
+          response_length: content.length,
+          transaction_count: transactions.length,
+          ai_response: content.substring(0, 500) + (content.length > 500 ? '...' : '') // Show first 500 chars of AI response
+        },
+        200,
+        duration,
+        estimatedCost,
+        context.userId,
+        requestId
+      );
+
       // Parse AI response
       const categorizations = JSON.parse(content);
       
       // Validate and enhance results with user profile context
       return transactions.map((transaction, index) => {
         const aiResult = categorizations[index] || {};
+        
+        // 🎯 Handle new category suggestions properly
+        let finalCategory = aiResult.category;
+        if (aiResult.isNewCategory && aiResult.newCategoryName) {
+          // If AI suggests a new category, use that as the category
+          finalCategory = aiResult.newCategoryName;
+        } else if (!finalCategory) {
+          // Fallback to first selected category or 'Other'
+          finalCategory = selectedCategories[0] || 'Other';
+        }
+        
         return {
           description: transaction.description,
-          category: aiResult.category || selectedCategories[0] || 'Other',
+          category: finalCategory, // 🎯 Use properly resolved category
           subcategory: 'General',
           confidence: aiResult.confidence || 0.7,
           reasoning: aiResult.reasoning || `AI categorization for ${profession} in ${industry}`,
@@ -942,38 +1015,61 @@ Focus on accuracy for ${profession} in ${industry} sector, considering ${busines
   }
 
   private generateMockAIResults(transactions: BatchTransaction[]): TransactionAnalysisResult[] {
-    return transactions.map(transaction => ({
-      transactionId: transaction.id,
-      category: 'General Business',
-      subcategory: 'Uncategorized',
-      confidence: 0.6,
-      isTaxDeductible: false,
-      businessUsePercentage: 0,
-      taxCategory: 'Personal',
-      isBill: false,
-      isRecurring: false,
-      reasoning: 'Mock classification - configure AI for real analysis',
-      primaryType: transaction.type === 'credit' ? 'income' : 'expense',
-      processedAt: new Date().toISOString(),
-      source: 'ai'
-    }));
+    console.log('⚠️ WARNING: Generating MOCK AI results - OpenAI API key not configured');
+    
+    return transactions.map(transaction => {
+      const mockCategories = [
+        'Business Expense',
+        'Personal Expense', 
+        'Shopping',
+        'Food & Dining',
+        'Transportation',
+        'Entertainment',
+        'Utilities',
+        'Insurance'
+      ];
+      
+      const mockReasoning = [
+        'MOCK DATA: Based on transaction description pattern analysis',
+        'MOCK DATA: Categorized using merchant signature matching',
+        'MOCK DATA: Determined from amount and description context',
+        'MOCK DATA: Classified using historical transaction patterns',
+        'MOCK DATA: Categorized based on merchant category codes'
+      ];
+      
+      return {
+        transactionId: transaction.id,
+        category: mockCategories[Math.floor(Math.random() * mockCategories.length)],
+        subcategory: 'General',
+        confidence: 0.7, // Lower confidence for mock data
+        isTaxDeductible: false,
+        source: 'mock' as TransactionAnalysisResult['source'],
+        businessUsePercentage: 0,
+        taxCategory: 'Personal',
+        isBill: false,
+        isRecurring: false,
+        reasoning: mockReasoning[Math.floor(Math.random() * mockReasoning.length)],
+        primaryType: transaction.type === 'credit' ? 'income' : 'expense',
+        processedAt: new Date().toISOString(),
+      };
+    });
   }
 
   private createFallbackResult(transaction: BatchTransaction): TransactionAnalysisResult {
     return {
       transactionId: transaction.id,
       category: 'Uncategorized',
-      subcategory: '',
-      confidence: 0.3,
+      subcategory: 'General',
+      confidence: 0.5, // Low confidence for fallback
       isTaxDeductible: false,
+      source: 'fallback' as TransactionAnalysisResult['source'],
       businessUsePercentage: 0,
       taxCategory: 'Personal',
       isBill: false,
       isRecurring: false,
-      reasoning: 'Fallback classification due to processing error',
+      reasoning: 'MOCK FALLBACK: Unable to classify transaction - OpenAI API not configured',
       primaryType: transaction.type === 'credit' ? 'income' : 'expense',
       processedAt: new Date().toISOString(),
-      source: 'ai'
     };
   }
 

@@ -1,14 +1,37 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Load environment variables from the correct path (parent directory)
-dotenv.config({ path: path.join(process.cwd(), '..', '.env') });
+// Load environment variables from multiple possible locations
+const envPaths = [
+  path.join(process.cwd(), '.env'), // Current directory first
+  path.join(process.cwd(), '..', '.env'), // Parent directory as fallback
+  path.join(process.cwd(), '..', '..', '.env') // Root directory as final fallback
+];
+
+let envLoaded = false;
+for (const envPath of envPaths) {
+  try {
+    const result = dotenv.config({ path: envPath });
+    if (result.parsed && Object.keys(result.parsed).length > 0) {
+      console.log(`✅ Environment loaded from: ${envPath}`);
+      envLoaded = true;
+      break;
+    }
+  } catch (error) {
+    console.log(`⚠️ Could not load environment from: ${envPath}`);
+  }
+}
+
+if (!envLoaded) {
+  console.log('⚠️ No .env file found in any of the expected locations');
+}
 
 // 🔧 VERIFY OPENAI API KEY IS LOADED
 console.log('🔑 OpenAI API Key Status:', process.env.OPENAI_API_KEY ? 'CONFIGURED' : 'NOT CONFIGURED');
 if (!process.env.OPENAI_API_KEY) {
   console.error('❌ CRITICAL: OpenAI API key is not configured!');
   console.error('📝 Please check your .env file and ensure OPENAI_API_KEY is set');
+  console.error('📝 Expected locations:', envPaths.join(', '));
 }
 
 import express from 'express';
@@ -19,7 +42,7 @@ import helmet from 'helmet';
 import aiRoutes from './routes/ai-routes-working';
 import optimizedRoutes from './routes/ai-batch-optimized';
 import simpleRoutes from './routes/ai-simple';
-// import logRoutes from './routes/log-routes'; // Temporarily disabled to avoid compilation issues
+import logRoutes from './routes/logs';
 
 const app = express();
 const PORT = process.env.AI_PORT || 3002;
@@ -99,7 +122,7 @@ app.use((req, res, next) => {
 });
 
 // 📝 API Logging Routes
-// app.use('/api/logs', logRoutes); // Temporarily disabled to avoid compilation issues
+app.use('/api/logs', logRoutes);
 
 // 🧠 AI CLASSIFICATION ROUTES - CRITICAL: Mount the main AI routes  
 app.use('/', aiRoutes);

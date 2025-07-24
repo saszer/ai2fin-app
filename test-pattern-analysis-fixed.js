@@ -1,73 +1,63 @@
-// Quick test to verify pattern analysis fix
-// This will test the fixed OfflineBillPatternEngine
+const axios = require('axios');
 
-console.log('🧪 Testing Fixed Pattern Analysis...\n');
-
-// Simple test that can be run from browser console
-const testData = `
-// Copy this into browser console after the backend restarts:
-
-async function testFixedPatternAnalysis() {
-  console.log('🔧 Testing Fixed Pattern Analysis...');
-  
-  const token = localStorage.getItem('token');
-  if (!token) {
-    console.error('❌ Please log in first');
-    return;
-  }
-
-  const startTime = performance.now();
-  
+async function testPatternAnalysisFixed() {
   try {
-    const response = await fetch('/api/bills/analyze-patterns', {
-      method: 'POST',
+    console.log('🧪 Testing Pattern Analysis with Fixed Filter Structure...');
+    
+    // Test with the correct filter structure that matches FilterConfig
+    const requestPayload = {
+      transactions: [], // Empty array to trigger server-side fetching
+      filters: {
+        searchQuery: '',
+        dateFrom: undefined,
+        dateTo: undefined,
+        datePreset: 'all',
+        amountMin: undefined,
+        amountMax: undefined,
+        categoryIds: [],
+        transactionTypes: [],
+        primaryTypes: [],
+        secondaryTypes: [],
+        uncategorizedOnly: false,
+        taxDeductibleOnly: false,
+        recurringOnly: false,
+        dataBucketIds: []
+      }
+    };
+
+    console.log('📤 Sending request payload:', JSON.stringify(requestPayload, null, 2));
+    
+    const response = await axios.post('http://localhost:3001/api/bills-patterns/analyze-patterns', requestPayload, {
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': \`Bearer \${token}\`
-      },
-      body: JSON.stringify({
-        transactions: [
-          {
-            id: 'test1',
-            description: 'Netflix',
-            amount: -14.99,
-            date: '2024-07-01',
-            merchant: 'Netflix'
-          },
-          {
-            id: 'test2',
-            description: 'Netflix',
-            amount: -14.99,
-            date: '2024-06-01',
-            merchant: 'Netflix'
-          }
-        ]
-      })
+        'Authorization': 'Bearer test-token', // You'll need a real token
+        'Content-Type': 'application/json'
+      }
     });
-    
-    const endTime = performance.now();
-    console.log(\`⏱️  Response time: \${Math.round(endTime - startTime)}ms\`);
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log('✅ SUCCESS!', data);
-      console.log(\`🎉 Found \${data.patterns ? data.patterns.length : 0} patterns\`);
-    } else {
-      console.error('❌ Failed:', response.status, await response.text());
+
+    console.log('✅ Response:', {
+      success: response.data.success,
+      patternsFound: response.data.patterns?.length || 0,
+      totalTransactions: response.data.stats?.totalTransactions || 0,
+      processingTime: response.data.processingTime
+    });
+
+    if (response.data.patterns && response.data.patterns.length > 0) {
+      console.log('\n📊 Detected Patterns:');
+      response.data.patterns.forEach((pattern, index) => {
+        console.log(`  ${index + 1}. ${pattern.name} (${pattern.merchant})`);
+        console.log(`     Frequency: ${pattern.frequency}, Confidence: ${pattern.confidence}`);
+        console.log(`     Transaction Count: ${pattern.transactionCount}`);
+      });
     }
+
   } catch (error) {
-    console.error('❌ Error:', error);
+    console.error('❌ Test failed:', error.response?.data || error.message);
+    
+    if (error.response?.status === 401) {
+      console.log('💡 Note: You need to provide a valid authentication token for this test');
+    }
   }
 }
 
 // Run the test
-testFixedPatternAnalysis();
-`;
-
-console.log(testData);
-console.log('\n🔧 Pattern Analysis Fix Applied!');
-console.log('📋 Next Steps:');
-console.log('1. Wait for backend to fully restart');
-console.log('2. Copy the test function above into browser console');
-console.log('3. Test should complete in <1 second instead of hanging');
-console.log('4. Try the Bill Pattern Analysis modal again'); 
+testPatternAnalysisFixed(); 
