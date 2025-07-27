@@ -21,6 +21,7 @@ export interface UserPreferences {
   country: string;
   theme: 'light' | 'dark' | 'auto';
   notifications: NotificationPreferences;
+  themeSettings?: import('./theme').ThemeSettings;
 }
 
 export interface NotificationPreferences {
