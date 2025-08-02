@@ -1,14 +1,93 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import exportRoutes from './routes/exports';
 
 const app = express();
 const PORT = process.env.ANALYTICS_PORT || 3004;
 
+// 🔧 CORS Configuration - Production Security
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3001'
+    ];
+    
+    // Allow requests with no origin (mobile apps, etc.) - but log them
+    if (!origin) {
+      console.log('🔍 Analytics CORS: No origin request - allowing but logging');
+      return callback(null, true);
+    }
+    
+    // Handle trailing slashes and normalize origins
+    const normalizedOrigin = origin.endsWith('/') ? origin.slice(0, -1) : origin;
+    const isAllowed = allowedOrigins.includes(normalizedOrigin) || allowedOrigins.includes(origin);
+    
+    if (isAllowed) {
+      console.log('✅ Analytics CORS: Origin allowed -', origin);
+      callback(null, true);
+    } else {
+      console.log('❌ Analytics CORS: Origin blocked -', origin);
+      console.log('🔍 Allowed origins:', allowedOrigins);
+      callback(new Error('CORS: Origin not allowed'), false);
+    }
+  },
+  credentials: true,
+  optionsSuccessStatus: 200,
+  maxAge: 86400, // 24 hours
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+};
+
 // Middleware
-app.use(helmet());
-app.use(cors());
-app.use(express.json());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+      scriptSrc: ["'self'"],
+      connectSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// Additional security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '10mb' })); // Limit request body size
+
+// 📝 HTTP Request Logging Middleware
+app.use((req, res, next) => {
+  const startTime = Date.now();
+  const { method, url, ip } = req;
+  const userAgent = req.get('User-Agent') || 'unknown';
+
+  console.log(`📊 Analytics ${method} ${url} - ${ip} - ${userAgent}`);
+
+  res.on('finish', () => {
+    const duration = Date.now() - startTime;
+    console.log(`📊 Analytics ${method} ${url} - ${res.statusCode} (${duration}ms)`);
+  });
+
+  next();
+});
 
 // Health check
 app.get('/health', (req, res) => {
@@ -20,7 +99,8 @@ app.get('/health', (req, res) => {
     features: {
       advancedReporting: process.env.ENABLE_ADVANCED_REPORTING === 'true',
       exports: process.env.ENABLE_EXPORTS === 'true',
-      insights: process.env.ENABLE_INSIGHTS === 'true'
+      insights: process.env.ENABLE_INSIGHTS === 'true',
+      atoExports: true // embracingearth.space - ATO myDeductions export support
     }
   });
 });
@@ -34,11 +114,15 @@ app.get('/api/analytics/status', (req, res) => {
       'advanced-reporting',
       'exports',
       'insights',
-      'data-visualization'
+      'data-visualization',
+      'ato-exports' // embracingearth.space - ATO myDeductions export support
     ],
     version: '1.0.0'
   });
 });
+
+// Export routes
+app.use(exportRoutes);
 
 app.post('/api/analytics/generate-report', async (req, res) => {
   try {
@@ -145,10 +229,14 @@ app.get('/api/analytics/insights', async (req, res) => {
 
 // Start server
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`📊 Analytics Service running on port ${PORT}`);
+  // Use 0.0.0.0 for production to allow external connections, but rely on CORS for security
+  const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1';
+  app.listen(Number(PORT), host, () => {
+    console.log(`📊 Analytics Service running on port ${PORT} (${host})`);
     console.log(`📈 Advanced Reporting: ${process.env.ENABLE_ADVANCED_REPORTING === 'true' ? 'Enabled' : 'Disabled'}`);
     console.log(`📤 Exports: ${process.env.ENABLE_EXPORTS === 'true' ? 'Enabled' : 'Disabled'}`);
+    console.log(`🏢 ATO Exports: Enabled`); // embracingearth.space - ATO myDeductions export support
+    console.log(`🛡️ CORS Security: ${process.env.NODE_ENV === 'production' ? 'Production Mode' : 'Development Mode'}`);
   });
 }
 
