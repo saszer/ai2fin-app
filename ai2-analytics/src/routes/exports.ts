@@ -32,7 +32,7 @@ interface ExportPreview {
 // Helper function to process transactions for ATO format
 function processTransactionsForATO(transactions: Transaction[]): ExportPreview {
   const income = transactions.filter(t => 
-    t.primaryType === 'income' && t.isTaxDeductible
+    t.primaryType === 'income' && (t.isTaxDeductible || t.expenseType === 'business')
   );
   
   const expenses = transactions.filter(t => 
