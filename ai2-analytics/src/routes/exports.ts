@@ -19,6 +19,36 @@ interface Transaction {
   gstAmount?: number;
 }
 
+// Interface for travel data
+interface Vehicle {
+  id: string;
+  registration: string;
+  description: string;
+  ownership: string;
+  vehicleType: string;
+  isActive: boolean;
+}
+
+interface Trip {
+  id: string;
+  vehicleId: string;
+  tripDate: string;
+  tripType: string;
+  purpose: string;
+  startOdometer: number;
+  endOdometer: number;
+  startLocation?: string;
+  endLocation?: string;
+  tripDetails: string;
+  distanceKm: number;
+  isMultipleTrips: boolean;
+  isReturnJourney: boolean;
+  totalKm: number;
+  isLogbookTrip: boolean;
+  notes?: string;
+  vehicle: Vehicle;
+}
+
 // Interface for export preview
 interface ExportPreview {
   income: Transaction[];
@@ -27,10 +57,14 @@ interface ExportPreview {
   totalExpenses: number;
   businessExpenses: number;
   employeeExpenses: number;
+  trips: Trip[];
+  vehicles: Vehicle[];
+  totalTrips: number;
+  totalDistance: number;
 }
 
 // Helper function to process transactions for ATO format
-function processTransactionsForATO(transactions: Transaction[]): ExportPreview {
+function processTransactionsForATO(transactions: Transaction[], trips?: Trip[], vehicles?: Vehicle[]): ExportPreview {
   const income = transactions.filter(t => 
     t.primaryType === 'income' && (t.isTaxDeductible || t.expenseType === 'business')
   );
@@ -44,6 +78,9 @@ function processTransactionsForATO(transactions: Transaction[]): ExportPreview {
   const businessExpenses = expenses.filter(t => t.expenseType === 'business' || !t.expenseType).reduce((sum, t) => sum + Math.abs(t.amount), 0);
   const employeeExpenses = expenses.filter(t => t.expenseType === 'employee').reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
+  const totalTrips = trips?.length || 0;
+  const totalDistance = trips?.reduce((sum, t) => sum + t.totalKm, 0) || 0;
+
   return {
     income,
     expenses,
@@ -51,6 +88,10 @@ function processTransactionsForATO(transactions: Transaction[]): ExportPreview {
     totalExpenses,
     businessExpenses,
     employeeExpenses,
+    trips: trips || [],
+    vehicles: vehicles || [],
+    totalTrips,
+    totalDistance,
   };
 }
 
@@ -64,9 +105,9 @@ function formatDateForATO(dateString: string): string {
   }
 }
 
-// Helper function to generate ATO CSV content
-function generateATOCSV(transactions: Transaction[], startDate: string, endDate: string): string {
-  const processed = processTransactionsForATO(transactions);
+// Helper function to generate ATO CSV content with travel data
+function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Vehicle[], startDate: string, endDate: string): string {
+  const processed = processTransactionsForATO(transactions, trips, vehicles);
   
   let csv = `Date: ${format(new Date(), 'dd/MM/yyyy HH:mm:ss')}\n`;
   csv += `ATO app - myDeductions\n\n`;
@@ -95,15 +136,40 @@ function generateATOCSV(transactions: Transaction[], startDate: string, endDate:
     csv += `Not uploaded,${type},Completed,${formatDateForATO(expense.date)},${amount.toFixed(2)},${gst ? gst.toFixed(2) : ''},"${expense.description}",${percentage}%,"${subType}","${subTypeDetail}",,,\n`;
   }
   
+  // Trips section
+  csv += `\nTrips\n`;
+  csv += `Uploaded,Type,Status,Date,Vehicle,Purpose of trip,Start odometer*,End odometer*,Start location#,End location#,Trip details,Trip distance*,Record multiple trips*,Record the return journey*,Total Km,Logbook trip\n`;
+  
+  for (const trip of processed.trips) {
+    const tripType = trip.tripType === 'BUSINESS' ? 'Business' : 'Employee';
+    const multipleTrips = trip.isMultipleTrips ? '1' : '0';
+    const returnJourney = trip.isReturnJourney ? 'Yes' : 'No';
+    const logbookTrip = trip.isLogbookTrip ? 'Y' : 'N';
+    
+    csv += `Not uploaded,${tripType},Completed,${formatDateForATO(trip.tripDate)},${trip.vehicle.registration},${trip.purpose},${trip.startOdometer.toFixed(2)},${trip.endOdometer.toFixed(2)},${trip.startLocation || ''},${trip.endLocation || ''},"${trip.tripDetails}",${trip.distanceKm.toFixed(2)},${multipleTrips},${returnJourney},${trip.totalKm.toFixed(2)},${logbookTrip}\n`;
+  }
+  
+  // Vehicles section
+  csv += `\nVehicles\n`;
+  csv += `Registration,Description,Ownership,Vehicle type\n`;
+  
+  for (const vehicle of processed.vehicles) {
+    const ownership = vehicle.ownership === 'OWNED' ? 'I own lease or hire-purchase' : 
+                     vehicle.ownership === 'LEASED' ? 'Leased' : 
+                     vehicle.ownership === 'HIRE_PURCHASE' ? 'Hire Purchase' : vehicle.ownership;
+    
+    csv += `${vehicle.registration},"${vehicle.description}",${ownership},${vehicle.vehicleType},\n`;
+  }
+  
   csv += `\n"* If applicable to expense or trip type."\n`;
   
   return csv;
 }
 
-// Generate ATO myDeductions export
+// Generate ATO myDeductions export with travel data
 router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
   try {
-    const { startDate, endDate, transactions } = req.body;
+    const { startDate, endDate, transactions, trips, vehicles } = req.body;
     
     if (!startDate || !endDate || !transactions) {
       return res.status(400).json({
@@ -113,8 +179,8 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
       });
     }
 
-    // Generate CSV content using real transaction data
-    const csvContent = generateATOCSV(transactions, startDate, endDate);
+    // Generate CSV content using real transaction data and travel data
+    const csvContent = generateATOCSV(transactions, trips || [], vehicles || [], startDate, endDate);
     const filename = `ATO_myDeductions_${format(new Date(startDate), 'yyyy-MM-dd')}_to_${format(new Date(endDate), 'yyyy-MM-dd')}.csv`;
 
     res.json({
@@ -123,7 +189,9 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
         csvContent,
         filename,
         recordCount: transactions.length,
-        preview: processTransactionsForATO(transactions)
+        tripCount: trips?.length || 0,
+        vehicleCount: vehicles?.length || 0,
+        preview: processTransactionsForATO(transactions, trips, vehicles)
       },
       timestamp: new Date().toISOString()
     });
@@ -140,7 +208,7 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
 // Get export preview data (processes real transactions passed from frontend)
 router.post('/api/analytics/export/preview', async (req, res) => {
   try {
-    const { startDate, endDate, transactions } = req.body;
+    const { startDate, endDate, transactions, trips, vehicles } = req.body;
     
     if (!startDate || !endDate || !transactions) {
       return res.status(400).json({
@@ -151,7 +219,7 @@ router.post('/api/analytics/export/preview', async (req, res) => {
     }
 
     // Process real transaction data for preview
-    const previewData = processTransactionsForATO(transactions);
+    const previewData = processTransactionsForATO(transactions, trips, vehicles);
 
     res.json({
       success: true,
