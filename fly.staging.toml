@@ -1,0 +1,38 @@
+# Staging configuration for AI2 platform
+app = "ai2-staging"
+primary_region = "iad"
+
+# Inherits most config from fly.toml
+[build]
+  dockerfile = "ai2-core-app/Dockerfile"
+  build_args = {
+    NODE_ENV = "staging"
+  }
+
+[env]
+  NODE_ENV = "staging"
+  LOG_LEVEL = "debug"
+  ENABLE_PROFILING = "true"
+  # embracingearth.space branding
+  BRAND_URL = "https://embracingearth.space"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8080
+  processes = ["app"]
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.http_checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "get"
+    path = "/health"
+
+[[vm]]
+  memory = "256mb"
+  cpus = 1 

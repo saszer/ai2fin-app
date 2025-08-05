@@ -1,0 +1,33 @@
+# PR Preview configuration for AI2 platform
+primary_region = "iad"
+
+[build]
+  dockerfile = "ai2-core-app/Dockerfile"
+  build_args = {
+    NODE_ENV = "development"
+  }
+
+[env]
+  NODE_ENV = "preview"
+  LOG_LEVEL = "debug"
+  # embracingearth.space branding
+  BRAND_URL = "https://embracingearth.space"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8080
+  
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.http_checks]]
+    interval = "60s"
+    timeout = "10s"
+    grace_period = "30s"
+    method = "get"
+    path = "/health"
+
+[[vm]]
+  memory = "256mb"
+  cpus = 1 

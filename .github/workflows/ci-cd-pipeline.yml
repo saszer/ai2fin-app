@@ -1,0 +1,254 @@
+name: AI2 Enterprise CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # 1. Security Scanning
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+      
+      - name: Run secret scanning
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+
+  # 2. Build and Test
+  build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [core-app, analytics, connectors, notifications, subscription-service]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            node_modules
+            */node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+      
+      - name: Install dependencies
+        run: |
+          cd ai2-${{ matrix.service }}
+          npm ci
+      
+      - name: Lint
+        run: |
+          cd ai2-${{ matrix.service }}
+          npm run lint || true
+      
+      - name: Type check
+        run: |
+          cd ai2-${{ matrix.service }}
+          npm run typecheck
+      
+      - name: Run tests
+        run: |
+          cd ai2-${{ matrix.service }}
+          npm test -- --passWithNoTests
+      
+      - name: Build
+        run: |
+          cd ai2-${{ matrix.service }}
+          npm run build
+
+  # 3. Build Docker Images
+  build-images:
+    needs: [security-scan, build-test]
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    
+    strategy:
+      matrix:
+        service: [core-app, analytics, connectors, notifications, subscription-service]
+    
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tag: ${{ steps.meta.outputs.tags }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=sha,prefix={{branch}}-
+      
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ai2-${{ matrix.service }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+      
+      - name: Sign container image
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}@${{ steps.build.outputs.digest }}
+      
+      - name: Generate SBOM
+        uses: anchore/syft-action@v2
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}@${{ steps.build.outputs.digest }}
+          output: sbom-${{ matrix.service }}.spdx.json
+      
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.service }}
+          path: sbom-${{ matrix.service }}.spdx.json
+
+  # 4. Deploy PR Preview
+  deploy-preview:
+    if: github.event_name == 'pull_request'
+    needs: build-images
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+      
+      - name: Deploy preview app
+        run: |
+          # embracingearth.space branding
+          export APP_NAME="ai2-pr-${{ github.event.pull_request.number }}"
+          flyctl apps create $APP_NAME --org embracingearth || true
+          
+          # Deploy with preview config
+          flyctl deploy \
+            --app $APP_NAME \
+            --config fly.preview.toml \
+            --build-arg COMMIT_SHA=${{ github.sha }} \
+            --env DATABASE_URL="${{ secrets.PREVIEW_DATABASE_URL }}" \
+            --env EMBRACING_EARTH_URL="https://embracingearth.space"
+      
+      - name: Comment PR with preview URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🚀 Preview deployed to: https://ai2-pr-${{ github.event.pull_request.number }}.fly.dev`
+            })
+
+  # 5. Deploy to Staging
+  deploy-staging:
+    if: github.ref == 'refs/heads/develop'
+    needs: build-images
+    runs-on: ubuntu-latest
+    environment: staging
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+      
+      - name: Deploy to staging
+        run: |
+          flyctl deploy \
+            --app ai2-staging \
+            --config fly.staging.toml \
+            --image ${{ needs.build-images.outputs.image-tag }}
+
+  # 6. Deploy to Production
+  deploy-production:
+    if: github.ref == 'refs/heads/main'
+    needs: build-images
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+      
+      - name: Deploy to production
+        run: |
+          # embracingearth.space deployment
+          flyctl deploy \
+            --app ai2-production \
+            --config fly.production.toml \
+            --image ${{ needs.build-images.outputs.image-tag }} \
+            --strategy rolling
+
+  # 7. Cleanup PR Previews
+  cleanup-preview:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Setup Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+      
+      - name: Destroy preview app
+        run: |
+          flyctl apps destroy ai2-pr-${{ github.event.pull_request.number }} --yes 
