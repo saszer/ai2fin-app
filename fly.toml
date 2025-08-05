@@ -13,6 +13,8 @@ kill_timeout = "5s"
 [env]
   NODE_ENV = "production"
   PORT = "8080"
+  # Disable cluster mode - Fly.io handles horizontal scaling
+  CLUSTER_MODE = "false"
   # embracingearth.space branding
   BRAND_URL = "https://embracingearth.space"
 

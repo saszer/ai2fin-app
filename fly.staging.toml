@@ -13,6 +13,8 @@ primary_region = "iad"
   NODE_ENV = "staging"
   LOG_LEVEL = "debug"
   ENABLE_PROFILING = "true"
+  # Disable cluster mode - Fly.io handles horizontal scaling
+  CLUSTER_MODE = "false"
   # embracingearth.space branding
   BRAND_URL = "https://embracingearth.space"
 

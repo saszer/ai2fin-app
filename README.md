@@ -26,6 +26,8 @@ AI2 Enterprise Platform
 - [AI Modules Deep Dive](#-ai-modules-deep-dive)
 - [Quick Start](#-quick-start)
 - [Deployment Models](#-deployment-models)
+- [Production Deployment](#-production-deployment)
+- [Performance & Scaling](#-performance--scaling)
 - [API Documentation](#-api-documentation)
 - [Development](#-development)
 - [Configuration](#-configuration)
@@ -251,6 +253,94 @@ npm run start:premium
 npm run start:all
 ```
 
+## 🚀 Production Deployment
+
+### Infrastructure Overview
+
+- **Runtime**: Fly.io (stateless services with global distribution)
+- **Database**: GCP Cloud SQL (PostgreSQL with automatic backups)
+- **Storage**: Google Cloud Storage (for file uploads)
+- **CDN/WAF**: Cloudflare (DDoS protection and caching)
+- **Monitoring**: Prometheus + Grafana + Uptime Kuma
+- **CI/CD**: GitHub Actions with automated deployments
+
+### Quick Deployment Guide
+
+1. **Setup Infrastructure**
+   ```bash
+   # Run the automated setup script
+   chmod +x setup-deployment.sh
+   ./setup-deployment.sh
+   ```
+
+2. **Configure Secrets** (GitHub Repository Settings)
+   - `FLY_API_TOKEN` - From `flyctl auth token`
+   - `GCP_PROJECT_ID` - Your GCP project ID
+   - `OPENAI_API_KEY` - For AI services
+   - `DATABASE_URL` - PostgreSQL connection string
+
+3. **Deploy to Production**
+   ```bash
+   # Deploy to staging first
+   npm run deploy:staging
+   
+   # Then deploy to production
+   npm run deploy:production
+   ```
+
+### Production URLs
+- **Application**: `https://app.embracingearth.space`
+- **Status Page**: `https://status.embracingearth.space`
+- **API**: `https://app.embracingearth.space/api`
+
+For detailed deployment instructions, see [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md)
+
+## ⚡ Performance & Scaling
+
+### Cluster Mode Configuration
+
+The platform includes an enterprise-grade cluster mode for maximum performance:
+
+```bash
+# Development mode (no clustering)
+npm run start:core:standalone
+
+# Cluster mode (4 workers)
+CLUSTER_MODE=true npm start
+
+# Enterprise mode (8 workers + all optimizations)
+npm run start:enterprise
+```
+
+### Scaling Phases
+
+1. **Phase 1: Node.js Clustering** (Current)
+   - 4-8 worker processes per instance
+   - In-memory session management
+   - Basic rate limiting
+
+2. **Phase 2: Database Scaling** (With PostgreSQL + Redis)
+   - Connection pooling
+   - Redis caching layer
+   - Advanced rate limiting
+
+3. **Phase 3: Cloud Enterprise** (Full Scale)
+   - Multi-region deployment on Fly.io
+   - Auto-scaling based on load
+   - Global load balancing
+
+### Performance Recommendations
+
+**For Fly.io Deployment:**
+- Use **single-process mode** per Fly.io instance (no clustering)
+- Let Fly.io handle horizontal scaling across regions
+- Enable autoscaling: `flyctl autoscale balanced min=2 max=10`
+
+**For Self-Hosted/VPS:**
+- Use **cluster mode** with 4-8 workers
+- Enable all CPU cores for maximum throughput
+- Monitor memory usage (4GB recommended per instance)
+
 ## 📚 API Documentation
 
 ### Core Endpoints
@@ -355,12 +445,23 @@ ANALYTICS_PORT=3004
 NOTIFICATIONS_PORT=3005
 SUBSCRIPTION_PORT=3010
 
+# Performance Settings
+CLUSTER_MODE=true          # Enable cluster mode
+CLUSTER_WORKERS=4          # Number of worker processes
+MEMORY_LIMIT=4096         # Memory limit per worker (MB)
+
 # AI Configuration
 OPENAI_API_KEY=your_openai_key
 AI_MODEL=gpt-4
 
 # Database
 DATABASE_URL=postgresql://user:pass@localhost:5432/ai2
+
+# Redis (optional)
+REDIS_URL=redis://localhost:6379
+
+# Production URLs
+BRAND_URL=https://embracingearth.space
 ```
 
 ### Feature Flags
@@ -395,6 +496,13 @@ GET /health
 npm run health:check
 ```
 
+### Production Monitoring Stack
+
+- **Status Page**: Public uptime monitoring at `status.embracingearth.space`
+- **Metrics**: Prometheus + Grafana dashboards
+- **Alerts**: Configurable alerts for downtime, high CPU, memory issues
+- **Logs**: Centralized logging with search capabilities
+
 ### Logging
 
 Centralized logging with Winston:
@@ -410,6 +518,21 @@ Key performance indicators:
 - **Error Rates**: Service reliability
 - **AI Accuracy**: ML model performance
 - **Resource Usage**: CPU, memory, disk
+
+## 💰 Cost Optimization
+
+### Estimated Monthly Costs (Production)
+- **Fly.io**: $50-100 (2-4 instances)
+- **GCP Cloud SQL**: $25-50 (db-f1-micro)
+- **GCP Storage**: $5-10
+- **Cloudflare**: Free tier
+- **Total**: ~$80-160/month
+
+### Cost Saving Tips
+1. Use Fly.io autoscaling to match demand
+2. Schedule non-production environments to shut down after hours
+3. Use GCS lifecycle policies for old uploads
+4. Monitor and optimize database queries
 
 ## 🔧 Troubleshooting
 
@@ -430,6 +553,19 @@ DEBUG=* npm run start:all
 DEBUG=ai2:* npm run start:ai
 ```
 
+### Production Troubleshooting
+
+```bash
+# Check Fly.io logs
+flyctl logs --app ai2-production
+
+# SSH into container
+flyctl ssh console --app ai2-production
+
+# Check database connectivity
+psql $DATABASE_URL -c "SELECT 1;"
+```
+
 ## 📜 License
 
 This project is proprietary software. See [LICENSE](./LICENSE) for details.
@@ -443,7 +579,8 @@ Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines.
 - **Documentation**: See individual service READMEs
 - **Issues**: Create GitHub issues for bugs and features
 - **Enterprise Support**: Contact our enterprise team
+- **Status Page**: https://status.embracingearth.space
 
 ---
 
-**AI2 Enterprise Platform** - Intelligent Financial Management at Scale 🚀 
+**AI2 Enterprise Platform** - Intelligent Financial Management at Scale 🚀

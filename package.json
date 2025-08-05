@@ -18,6 +18,8 @@
     "start:all": "concurrently \"npm run start:core\" \"npm run start:services\"",
     "start:core": "cd ai2-core-app && npm start",
     "start:core:standalone": "cross-env ENABLE_AI=false ENABLE_SUBSCRIPTION=false ENABLE_ANALYTICS=false ENABLE_CONNECTORS=false ENABLE_NOTIFICATIONS=false npm run start:core",
+    "deploy:staging": "flyctl deploy --app ai2-staging",
+    "deploy:production": "flyctl deploy --app ai2-production",
     "start:services": "concurrently \"npm run start:subscription\" \"npm run start:ai\" \"npm run start:connectors\" \"npm run start:analytics\" \"npm run start:notifications\"",
     "start:subscription": "cd ai2-subscription-service && npm start",
     "start:ai": "cd ai2-ai-modules && npm run start",
@@ -54,7 +56,8 @@
     "clean:connectors": "cd ai2-connectors && npm run clean",
     "clean:analytics": "cd ai2-analytics && npm run clean",
     "clean:notifications": "cd ai2-notifications && npm run clean",
-    "setup:all": "npm install && npm run build:all"
+    "setup:all": "npm install && npm run build:all",
+    "typecheck:all": "npm run typecheck --workspaces"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
