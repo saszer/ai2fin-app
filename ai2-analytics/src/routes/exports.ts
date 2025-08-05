@@ -49,6 +49,22 @@ interface Trip {
   vehicle: Vehicle;
 }
 
+// Interface for unlinked bill occurrence
+interface UnlinkedBillOccurrence {
+  id: string;
+  billPatternId: string;
+  billPatternName: string;
+  dueDate: string;
+  amount: number;
+  frequency: string;
+  category: string | null;
+  isTaxDeductible: boolean;
+  businessUsePercentage: number;
+  expenseType: 'business' | 'employee';
+  notes: string | null;
+  isEstimated: boolean;
+}
+
 // Interface for export preview
 interface ExportPreview {
   income: Transaction[];
@@ -61,10 +77,13 @@ interface ExportPreview {
   vehicles: Vehicle[];
   totalTrips: number;
   totalDistance: number;
+  unlinkedBills: UnlinkedBillOccurrence[];
+  totalUnlinkedBills: number;
+  unlinkedBillsAmount: number;
 }
 
 // Helper function to process transactions for ATO format
-function processTransactionsForATO(transactions: Transaction[], trips?: Trip[], vehicles?: Vehicle[]): ExportPreview {
+function processTransactionsForATO(transactions: Transaction[], trips?: Trip[], vehicles?: Vehicle[], unlinkedBills?: UnlinkedBillOccurrence[]): ExportPreview {
   const income = transactions.filter(t => 
     t.primaryType === 'income' && (t.isTaxDeductible || t.expenseType === 'business')
   );
@@ -81,17 +100,36 @@ function processTransactionsForATO(transactions: Transaction[], trips?: Trip[], 
   const totalTrips = trips?.length || 0;
   const totalDistance = trips?.reduce((sum, t) => sum + t.totalKm, 0) || 0;
 
+  // Process unlinked bills and include them in totals
+  const processedUnlinkedBills = unlinkedBills || [];
+  const totalUnlinkedBills = processedUnlinkedBills.length;
+  const unlinkedBillsAmount = processedUnlinkedBills.reduce((sum, bill) => 
+    sum + (bill.amount * bill.businessUsePercentage / 100), 0
+  );
+
+  // Add unlinked bills to the appropriate expense totals
+  const totalExpensesWithUnlinked = totalExpenses + unlinkedBillsAmount;
+  const businessExpensesWithUnlinked = businessExpenses + processedUnlinkedBills
+    .filter(bill => bill.expenseType === 'business' || !bill.expenseType)
+    .reduce((sum, bill) => sum + (bill.amount * bill.businessUsePercentage / 100), 0);
+  const employeeExpensesWithUnlinked = employeeExpenses + processedUnlinkedBills
+    .filter(bill => bill.expenseType === 'employee')
+    .reduce((sum, bill) => sum + (bill.amount * bill.businessUsePercentage / 100), 0);
+
   return {
     income,
     expenses,
     totalIncome,
-    totalExpenses,
-    businessExpenses,
-    employeeExpenses,
+    totalExpenses: totalExpensesWithUnlinked, // Include unlinked bills in total
+    businessExpenses: businessExpensesWithUnlinked, // Include unlinked bills in business expenses
+    employeeExpenses: employeeExpensesWithUnlinked, // Include unlinked bills in employee expenses
     trips: trips || [],
     vehicles: vehicles || [],
     totalTrips,
     totalDistance,
+    unlinkedBills: processedUnlinkedBills,
+    totalUnlinkedBills,
+    unlinkedBillsAmount,
   };
 }
 
@@ -105,9 +143,9 @@ function formatDateForATO(dateString: string): string {
   }
 }
 
-// Helper function to generate ATO CSV content with travel data
-function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Vehicle[], startDate: string, endDate: string): string {
-  const processed = processTransactionsForATO(transactions, trips, vehicles);
+// Helper function to generate ATO CSV content with travel data and unlinked bills
+function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Vehicle[], startDate: string, endDate: string, unlinkedBills?: UnlinkedBillOccurrence[]): string {
+  const processed = processTransactionsForATO(transactions, trips, vehicles, unlinkedBills);
   
   let csv = `Date: ${format(new Date(), 'dd/MM/yyyy HH:mm:ss')}\n`;
   csv += `ATO app - myDeductions\n\n`;
@@ -134,6 +172,18 @@ function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Ve
     const subTypeDetail = expense.expenseType === 'employee' ? 'Other' : '';
     
     csv += `Not uploaded,${type},Completed,${formatDateForATO(expense.date)},${amount.toFixed(2)},${gst ? gst.toFixed(2) : ''},"${expense.description}",${percentage}%,"${subType}","${subTypeDetail}",,,\n`;
+  }
+
+  // Add unlinked bills as estimated expenses
+  for (const bill of processed.unlinkedBills) {
+    const amount = Math.abs(bill.amount);
+    const percentage = bill.businessUsePercentage || 100;
+    const type = bill.expenseType === 'employee' ? 'Employee' : 'Business';
+    const subType = bill.expenseType === 'employee' ? 'Other work-related' : 'All other expenses';
+    const subTypeDetail = bill.expenseType === 'employee' ? 'Other' : '';
+    const description = `${bill.billPatternName} - ${bill.frequency} pattern occurrence (Not linked to bank transaction)`;
+    
+    csv += `Not uploaded,${type},Completed,${formatDateForATO(bill.dueDate)},${amount.toFixed(2)},,"${description}",${percentage}%,"${subType}","${subTypeDetail}",,,\n`;
   }
   
   // Trips section
@@ -169,7 +219,7 @@ function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Ve
 // Generate ATO myDeductions export with travel data
 router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
   try {
-    const { startDate, endDate, transactions, trips, vehicles } = req.body;
+    const { startDate, endDate, transactions, trips, vehicles, unlinkedBills } = req.body;
     
     if (!startDate || !endDate || !transactions) {
       return res.status(400).json({
@@ -179,8 +229,8 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
       });
     }
 
-    // Generate CSV content using real transaction data and travel data
-    const csvContent = generateATOCSV(transactions, trips || [], vehicles || [], startDate, endDate);
+    // Generate CSV content using real transaction data, travel data, and unlinked bills
+    const csvContent = generateATOCSV(transactions, trips || [], vehicles || [], startDate, endDate, unlinkedBills || []);
     const filename = `ATO_myDeductions_${format(new Date(startDate), 'yyyy-MM-dd')}_to_${format(new Date(endDate), 'yyyy-MM-dd')}.csv`;
 
     res.json({
@@ -191,7 +241,8 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
         recordCount: transactions.length,
         tripCount: trips?.length || 0,
         vehicleCount: vehicles?.length || 0,
-        preview: processTransactionsForATO(transactions, trips, vehicles)
+        unlinkedBillCount: unlinkedBills?.length || 0,
+        preview: processTransactionsForATO(transactions, trips, vehicles, unlinkedBills)
       },
       timestamp: new Date().toISOString()
     });
@@ -208,7 +259,7 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
 // Get export preview data (processes real transactions passed from frontend)
 router.post('/api/analytics/export/preview', async (req, res) => {
   try {
-    const { startDate, endDate, transactions, trips, vehicles } = req.body;
+    const { startDate, endDate, transactions, trips, vehicles, unlinkedBills } = req.body;
     
     if (!startDate || !endDate || !transactions) {
       return res.status(400).json({
@@ -218,8 +269,8 @@ router.post('/api/analytics/export/preview', async (req, res) => {
       });
     }
 
-    // Process real transaction data for preview
-    const previewData = processTransactionsForATO(transactions, trips, vehicles);
+    // Process real transaction data for preview including unlinked bills
+    const previewData = processTransactionsForATO(transactions, trips, vehicles, unlinkedBills);
 
     res.json({
       success: true,
