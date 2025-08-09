@@ -1,0 +1,11 @@
+{
+  "extends": "../../packages/client-core/tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-native",
+    "baseUrl": ".",
+    "paths": {
+      "@ai2/client-core": ["../../packages/client-core/src"]
+    }
+  }
+}
+

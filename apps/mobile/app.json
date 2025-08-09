@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "AI2 Mobile",
+    "slug": "ai2-mobile",
+    "scheme": "ai2mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": { "image": "./assets/splash.png", "resizeMode": "contain", "backgroundColor": "#ffffff" },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ai2.mobile"
+    },
+    "android": {
+      "package": "com.ai2.mobile",
+      "adaptiveIcon": { "foregroundImage": "./assets/adaptive-icon.png", "backgroundColor": "#FFFFFF" }
+    },
+    "extra": {
+      "eas": { "projectId": "local" }
+    }
+  }
+}
+
