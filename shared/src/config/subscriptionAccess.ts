@@ -15,12 +15,13 @@ export const FREE_AUTH_FEATURES: FeatureKey[] = [
   'patterns',
   'travel_expenses',
   'personalize',
-  'subscription'
+  'subscription',
+  'categories_management'
 ];
 
 export const PREMIUM_FEATURES: FeatureKey[] = [
   'all_transactions',
-  'categories_management',
+  
   'expenses',
   'tax_analysis',
   'ato_export',
@@ -48,4 +49,5 @@ export const API_PREFIX_TO_FEATURE: Record<string, { auth: boolean; subscription
   '/api/trips': { auth: true, subscription: true },
   '/api/export': { auth: true, subscription: true },
   '/api/categories': { auth: true, subscription: true },
+  '/api/analytics': { auth: true, subscription: true },
 };
