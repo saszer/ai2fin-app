@@ -6,9 +6,7 @@ kill_timeout = "5s"
 
 [build]
   dockerfile = "ai2-core-app/Dockerfile"
-  build_args = {
-    NODE_ENV = "production"
-  }
+  build_args = { NODE_ENV = "production" }
 
 [env]
   NODE_ENV = "production"
