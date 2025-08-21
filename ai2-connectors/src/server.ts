@@ -1,9 +1,16 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import { authenticateToken, serviceAuth } from './middleware/auth';
 
 const app = express();
 const PORT = process.env.CONNECTORS_PORT || 3003;
+
+// Security validation
+if (!process.env.JWT_SECRET) {
+  console.error('CRITICAL: JWT_SECRET not configured for connectors service');
+  process.exit(1);
+}
 
 // Middleware
 app.use(helmet());
@@ -39,7 +46,7 @@ app.get('/api/connectors/status', (req, res) => {
   });
 });
 
-app.post('/api/connectors/bank/connect', async (req, res) => {
+app.post('/api/connectors/bank/connect', authenticateToken, async (req, res) => {
   try {
     const { bankName, credentials } = req.body;
     

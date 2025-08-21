@@ -1,9 +1,16 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import { authenticateToken, serviceAuth } from './middleware/auth';
 
 const app = express();
 const PORT = process.env.NOTIFICATIONS_PORT || 3005;
+
+// Security validation
+if (!process.env.JWT_SECRET) {
+  console.error('CRITICAL: JWT_SECRET not configured for notifications service');
+  process.exit(1);
+}
 
 // Middleware
 app.use(helmet());
@@ -40,7 +47,7 @@ app.get('/api/notifications/status', (req, res) => {
   });
 });
 
-app.post('/api/notifications/send', async (req, res) => {
+app.post('/api/notifications/send', authenticateToken, async (req, res) => {
   try {
     const { type, recipient, subject, message, priority = 'normal' } = req.body;
     
