@@ -249,3 +249,5 @@ runAudit().catch(error => {
   console.error(chalk.red('Audit failed:'), error);
   process.exit(1);
 });
+
+

@@ -89,3 +89,5 @@ export const serviceAuth = (req: Request, res: Response, next: NextFunction) => 
   console.log(`🔐 Service notification trigger: ${req.method} ${req.path}`);
   next();
 };
+
+
