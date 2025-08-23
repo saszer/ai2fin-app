@@ -9,6 +9,7 @@ import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import Joi from 'joi';
+import crypto from 'crypto';
 
 // Types
 interface AuthenticatedRequest extends Request {
@@ -183,7 +184,7 @@ export const validateApiKey = (
 
   // In production, validate against database
   // For now, check against environment variable
-  if (apiKey !== process.env.VALID_API_KEY) {
+  if (!process.env.VALID_API_KEY || !crypto.timingSafeEqual(Buffer.from(apiKey), Buffer.from(process.env.VALID_API_KEY))) {
     res.status(403).json({
       success: false,
       error: 'Invalid API key',
