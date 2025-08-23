@@ -101,3 +101,5 @@ Write-Host "If all endpoints returned 200, pages should load data correctly." -F
 Write-Host "If you see 401/403 errors, there's a JWT issuer mismatch." -ForegroundColor Yellow
 Write-Host "If you see 500 errors, check database connection." -ForegroundColor Yellow
 
+
+

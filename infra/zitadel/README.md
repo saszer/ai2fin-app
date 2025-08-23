@@ -42,3 +42,5 @@ terraform apply -var zitadel_domain="ai2fin2-sbpvwc.au1.zitadel.cloud" -var proj
 
 
 
+
+
