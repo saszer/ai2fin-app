@@ -95,3 +95,5 @@ resource "zitadel_application_oidc" "core_app" {
 // a key in Console and store PEM + kid in your secret manager.
 
 
+
+

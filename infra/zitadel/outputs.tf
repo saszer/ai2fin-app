@@ -11,3 +11,5 @@ output "oidc_client_id" {
 // If application key resource becomes available in provider, also output kid and private key here
 
 
+
+

@@ -39,3 +39,5 @@ terraform apply -var zitadel_domain="ai2fin2-sbpvwc.au1.zitadel.cloud" -var proj
 ## Troubleshooting
 - Ensure the provider version in `main.tf` is compatible.
 - Confirm `ZITADEL_TOKEN` is set and has org permissions to create projects/apps.
+
+
