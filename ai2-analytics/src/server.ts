@@ -5,6 +5,10 @@ import exportRoutes from './routes/exports';
 
 const app = express();
 const PORT = process.env.ANALYTICS_PORT || 3004;
+// embracingearth.space - CF Origin Lock configuration (env-driven)
+const ORIGIN_LOCK_ENABLED = process.env.ENFORCE_CF_ORIGIN_LOCK === 'true';
+const ORIGIN_HEADER_NAME = (process.env.ORIGIN_HEADER_NAME || 'x-origin-auth').toLowerCase();
+const ORIGIN_SHARED_SECRET = process.env.ORIGIN_SHARED_SECRET || '';
 
 // 🔧 CORS Configuration - Production Security
 const corsOptions = {
@@ -43,6 +47,26 @@ const corsOptions = {
 };
 
 // Middleware
+// CF Origin Lock - ensure requests arrive via Cloudflare by validating a secret header
+if (ORIGIN_LOCK_ENABLED && ORIGIN_SHARED_SECRET) {
+  app.use((req, res, next) => {
+    if (process.env.NODE_ENV === 'development') return next();
+    const received = String(req.headers[ORIGIN_HEADER_NAME] || '');
+    if (received !== ORIGIN_SHARED_SECRET) {
+      console.warn('🔒 Analytics origin lock rejection', {
+        path: req.originalUrl,
+        remoteAddress: req.ip,
+        headerPresent: Boolean(req.headers[ORIGIN_HEADER_NAME]),
+        headerName: ORIGIN_HEADER_NAME
+      });
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    return next();
+  });
+  console.log('🔒 Analytics: Cloudflare Origin Lock enabled', { headerName: ORIGIN_HEADER_NAME });
+} else {
+  console.log('🔒 Analytics: Cloudflare Origin Lock disabled', { reason: ORIGIN_LOCK_ENABLED ? 'missing_shared_secret' : 'enforcement_flag_off' });
+}
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {

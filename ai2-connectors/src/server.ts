@@ -5,6 +5,10 @@ import { authenticateToken, serviceAuth } from './middleware/auth';
 
 const app = express();
 const PORT = process.env.CONNECTORS_PORT || 3003;
+// embracingearth.space - CF Origin Lock configuration (env-driven)
+const ORIGIN_LOCK_ENABLED = process.env.ENFORCE_CF_ORIGIN_LOCK === 'true';
+const ORIGIN_HEADER_NAME = (process.env.ORIGIN_HEADER_NAME || 'x-origin-auth').toLowerCase();
+const ORIGIN_SHARED_SECRET = process.env.ORIGIN_SHARED_SECRET || '';
 
 // Security validation
 if (!process.env.JWT_SECRET) {
@@ -13,6 +17,26 @@ if (!process.env.JWT_SECRET) {
 }
 
 // Middleware
+// CF Origin Lock - ensure requests arrive via Cloudflare by validating a secret header
+if (ORIGIN_LOCK_ENABLED && ORIGIN_SHARED_SECRET) {
+  app.use((req, res, next) => {
+    if (process.env.NODE_ENV === 'development') return next();
+    const received = String(req.headers[ORIGIN_HEADER_NAME] || '');
+    if (received !== ORIGIN_SHARED_SECRET) {
+      console.warn('🔒 Connectors origin lock rejection', {
+        path: req.originalUrl,
+        remoteAddress: req.ip,
+        headerPresent: Boolean(req.headers[ORIGIN_HEADER_NAME]),
+        headerName: ORIGIN_HEADER_NAME
+      });
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    return next();
+  });
+  console.log('🔒 Connectors: Cloudflare Origin Lock enabled', { headerName: ORIGIN_HEADER_NAME });
+} else {
+  console.log('🔒 Connectors: Cloudflare Origin Lock disabled', { reason: ORIGIN_LOCK_ENABLED ? 'missing_shared_secret' : 'enforcement_flag_off' });
+}
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
