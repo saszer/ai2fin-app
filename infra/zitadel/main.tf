@@ -104,3 +104,5 @@ resource "zitadel_application_oidc" "core_app" {
 
 
 
+
+
