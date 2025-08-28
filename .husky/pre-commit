@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+# Pre-commit: enterprise secret scan (cross-platform)
+# Requires Node.js and Git available in PATH
+
+node scripts/secret-scan.js
+status=$?
+if [ $status -ne 0 ]; then
+  echo "\n❌ Pre-commit blocked: secret scan failed."
+  exit $status
+fi
+
+exit 0
+
+
+
+

@@ -74,3 +74,5 @@ async function debugBearerToken() {
 }
 
 debugBearerToken();
+
+

@@ -122,3 +122,5 @@ The frontend is using the correct endpoint, so investigate:
 2. **Create token validation test**
 3. **Debug actual 401 root cause**
 4. **Verify subscription service integration**
+
+

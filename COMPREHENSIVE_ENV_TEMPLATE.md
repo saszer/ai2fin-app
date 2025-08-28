@@ -386,3 +386,5 @@ COOKIE_SECURE=false
 ```
 
 This template includes all environment variables found in your codebase. Choose the ones relevant to your deployment and configure them accordingly.
+
+
