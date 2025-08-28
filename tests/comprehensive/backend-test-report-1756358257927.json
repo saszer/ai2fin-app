@@ -1,0 +1,309 @@
+{
+  "summary": {
+    "total": 42,
+    "passed": 40,
+    "failed": 2,
+    "warnings": 0,
+    "skipped": 0,
+    "totalTime": 2077,
+    "avgDuration": 51.325
+  },
+  "results": [
+    {
+      "test": "System Health Check",
+      "status": "PASS",
+      "details": "Uptime: undefineds",
+      "duration": 23,
+      "timestamp": "2025-08-28T05:17:35.872Z"
+    },
+    {
+      "test": "API Version Endpoint",
+      "status": "FAIL",
+      "details": "Status: 401",
+      "duration": 2,
+      "timestamp": "2025-08-28T05:17:35.874Z"
+    },
+    {
+      "test": "Service Discovery",
+      "status": "PASS",
+      "details": "Services: 5",
+      "duration": 2,
+      "timestamp": "2025-08-28T05:17:35.876Z"
+    },
+    {
+      "test": "Login Success (test@embracingearth.space)",
+      "status": "PASS",
+      "details": "Token: YES",
+      "duration": 514,
+      "timestamp": "2025-08-28T05:17:36.391Z"
+    },
+    {
+      "test": "Login Success (testuser1756355775896@embracingearth.space)",
+      "status": "PASS",
+      "details": "Token: YES",
+      "duration": 372,
+      "timestamp": "2025-08-28T05:17:36.763Z"
+    },
+    {
+      "test": "Login Invalid Credentials",
+      "status": "PASS",
+      "details": "Correctly rejected",
+      "duration": 88,
+      "timestamp": "2025-08-28T05:17:36.851Z"
+    },
+    {
+      "test": "JWT Token Structure",
+      "status": "PASS",
+      "details": "Fields: sub=true, userId=true, email=true",
+      "duration": 0,
+      "timestamp": "2025-08-28T05:17:36.852Z"
+    },
+    {
+      "test": "Cookie-based Login",
+      "status": "PASS",
+      "details": "Cookies: 2",
+      "duration": 372,
+      "timestamp": "2025-08-28T05:17:37.224Z"
+    },
+    {
+      "test": "No Auth - User Profile",
+      "status": "PASS",
+      "details": "Status: 200, Auth: false",
+      "duration": 3,
+      "timestamp": "2025-08-28T05:17:37.227Z"
+    },
+    {
+      "test": "No Auth - User Permissions",
+      "status": "PASS",
+      "details": "Status: 401, Auth: undefined",
+      "duration": 2,
+      "timestamp": "2025-08-28T05:17:37.229Z"
+    },
+    {
+      "test": "No Auth - Country Preferences",
+      "status": "PASS",
+      "details": "Status: 401, Auth: undefined",
+      "duration": 1,
+      "timestamp": "2025-08-28T05:17:37.230Z"
+    },
+    {
+      "test": "No Auth - Bank Categories",
+      "status": "PASS",
+      "details": "Status: 401, Auth: undefined",
+      "duration": 2,
+      "timestamp": "2025-08-28T05:17:37.232Z"
+    },
+    {
+      "test": "No Auth - Bank Transactions",
+      "status": "PASS",
+      "details": "Status: 401, Auth: undefined",
+      "duration": 2,
+      "timestamp": "2025-08-28T05:17:37.234Z"
+    },
+    {
+      "test": "No Auth - AI Profile",
+      "status": "PASS",
+      "details": "Status: 401, Auth: undefined",
+      "duration": 1,
+      "timestamp": "2025-08-28T05:17:37.235Z"
+    },
+    {
+      "test": "Bearer Token - User Profile",
+      "status": "PASS",
+      "details": "Status: 200",
+      "duration": 3,
+      "timestamp": "2025-08-28T05:17:37.239Z"
+    },
+    {
+      "test": "Bearer Token - User Permissions",
+      "status": "PASS",
+      "details": "Status: 200",
+      "duration": 52,
+      "timestamp": "2025-08-28T05:17:37.292Z"
+    },
+    {
+      "test": "Bearer Token - Country Preferences",
+      "status": "PASS",
+      "details": "Status: 200",
+      "duration": 21,
+      "timestamp": "2025-08-28T05:17:37.314Z"
+    },
+    {
+      "test": "Bearer Token - Bank Categories",
+      "status": "PASS",
+      "details": "Status: 200",
+      "duration": 19,
+      "timestamp": "2025-08-28T05:17:37.333Z"
+    },
+    {
+      "test": "Bearer Token - Bank Transactions",
+      "status": "PASS",
+      "details": "Status: 200",
+      "duration": 24,
+      "timestamp": "2025-08-28T05:17:37.357Z"
+    },
+    {
+      "test": "Bearer Token - AI Profile",
+      "status": "PASS",
+      "details": "Status: 200",
+      "duration": 17,
+      "timestamp": "2025-08-28T05:17:37.375Z"
+    },
+    {
+      "test": "Cookie Auth - User Profile",
+      "status": "PASS",
+      "details": "Status: 200",
+      "duration": 7,
+      "timestamp": "2025-08-28T05:17:37.382Z"
+    },
+    {
+      "test": "Cookie Auth - User Permissions",
+      "status": "PASS",
+      "details": "Status: 200",
+      "duration": 34,
+      "timestamp": "2025-08-28T05:17:37.416Z"
+    },
+    {
+      "test": "Cookie Auth - Country Preferences",
+      "status": "PASS",
+      "details": "Status: 200",
+      "duration": 9,
+      "timestamp": "2025-08-28T05:17:37.425Z"
+    },
+    {
+      "test": "Cookie Auth - Bank Categories",
+      "status": "FAIL",
+      "details": "Status: 401",
+      "duration": 7,
+      "timestamp": "2025-08-28T05:17:37.432Z"
+    },
+    {
+      "test": "Cookie Auth - Bank Transactions",
+      "status": "PASS",
+      "details": "Status: 200",
+      "duration": 11,
+      "timestamp": "2025-08-28T05:17:37.443Z"
+    },
+    {
+      "test": "Cookie Auth - AI Profile",
+      "status": "PASS",
+      "details": "Status: 200",
+      "duration": 9,
+      "timestamp": "2025-08-28T05:17:37.452Z"
+    },
+    {
+      "test": "Invalid Bearer Token",
+      "status": "PASS",
+      "details": "Status: 200",
+      "duration": 3,
+      "timestamp": "2025-08-28T05:17:37.455Z"
+    },
+    {
+      "test": "SQL Injection Protection",
+      "status": "PASS",
+      "details": "Payload: '; DROP TABLE users;...",
+      "duration": 18,
+      "timestamp": "2025-08-28T05:17:37.473Z"
+    },
+    {
+      "test": "SQL Injection Protection",
+      "status": "PASS",
+      "details": "Payload: 1' OR '1'='1...",
+      "duration": 16,
+      "timestamp": "2025-08-28T05:17:37.489Z"
+    },
+    {
+      "test": "SQL Injection Protection",
+      "status": "PASS",
+      "details": "Payload: admin'/*...",
+      "duration": 15,
+      "timestamp": "2025-08-28T05:17:37.504Z"
+    },
+    {
+      "test": "SQL Injection Protection",
+      "status": "PASS",
+      "details": "Payload: 1; DELETE FROM trans...",
+      "duration": 16,
+      "timestamp": "2025-08-28T05:17:37.520Z"
+    },
+    {
+      "test": "XSS Protection",
+      "status": "PASS",
+      "details": "Payload: <script>alert(\"xss\")...",
+      "duration": 17,
+      "timestamp": "2025-08-28T05:17:37.537Z"
+    },
+    {
+      "test": "XSS Protection",
+      "status": "PASS",
+      "details": "Payload: javascript:alert(\"xs...",
+      "duration": 14,
+      "timestamp": "2025-08-28T05:17:37.551Z"
+    },
+    {
+      "test": "XSS Protection",
+      "status": "PASS",
+      "details": "Payload: <img src=x onerror=a...",
+      "duration": 21,
+      "timestamp": "2025-08-28T05:17:37.573Z"
+    },
+    {
+      "test": "Rate Limiting",
+      "status": "PASS",
+      "details": "Success: 10/10, Rate limited: 0",
+      "duration": 0,
+      "timestamp": "2025-08-28T05:17:37.589Z"
+    },
+    {
+      "test": "User Profile Completeness",
+      "status": "PASS",
+      "details": "ID: true, Email: true",
+      "duration": 3,
+      "timestamp": "2025-08-28T05:17:37.592Z"
+    },
+    {
+      "test": "Permissions System",
+      "status": "PASS",
+      "details": "Type: object",
+      "duration": 264,
+      "timestamp": "2025-08-28T05:17:37.856Z"
+    },
+    {
+      "test": "Data Isolation",
+      "status": "PASS",
+      "details": "Transactions returned: N/A",
+      "duration": 34,
+      "timestamp": "2025-08-28T05:17:37.891Z"
+    },
+    {
+      "test": "Response Time - /api/auth/me",
+      "status": "PASS",
+      "details": "2ms (threshold: 200ms)",
+      "duration": 2,
+      "timestamp": "2025-08-28T05:17:37.893Z"
+    },
+    {
+      "test": "Response Time - /api/bank/categories",
+      "status": "PASS",
+      "details": "14ms (threshold: 500ms)",
+      "duration": 14,
+      "timestamp": "2025-08-28T05:17:37.907Z"
+    },
+    {
+      "test": "Response Time - /api/bank/transactions?limit=10",
+      "status": "PASS",
+      "details": "12ms (threshold: 1000ms)",
+      "duration": 12,
+      "timestamp": "2025-08-28T05:17:37.919Z"
+    },
+    {
+      "test": "Concurrent Requests",
+      "status": "PASS",
+      "details": "5/5 successful in 7ms",
+      "duration": 7,
+      "timestamp": "2025-08-28T05:17:37.926Z"
+    }
+  ],
+  "timestamp": "2025-08-28T05:17:37.927Z",
+  "baseURL": "http://localhost:3001"
+}

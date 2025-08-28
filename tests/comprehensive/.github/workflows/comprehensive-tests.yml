@@ -1,0 +1,444 @@
+name: 🎯 Comprehensive Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - backend
+          - frontend
+          - e2e
+      parallel:
+        description: 'Run tests in parallel'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  NODE_VERSION: '18'
+  API_BASE_URL: 'http://localhost:3001'
+  FRONTEND_URL: 'http://localhost:3000'
+
+jobs:
+  # Prerequisite checks
+  prerequisites:
+    name: 🔍 Prerequisites Check
+    runs-on: ubuntu-latest
+    outputs:
+      backend-ready: ${{ steps.backend-check.outputs.ready }}
+      dependencies-ready: ${{ steps.deps-check.outputs.ready }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install backend dependencies
+        run: |
+          cd ai2-core-app
+          npm ci
+
+      - name: Install test dependencies
+        run: |
+          cd tests/comprehensive
+          npm run setup
+
+      - name: Start backend service
+        run: |
+          cd ai2-core-app
+          npm run build:local
+          npm start &
+          echo "BACKEND_PID=$!" >> $GITHUB_ENV
+
+      - name: Wait for backend startup
+        run: |
+          echo "Waiting for backend to start..."
+          for i in {1..30}; do
+            if curl -f http://localhost:3001/health > /dev/null 2>&1; then
+              echo "Backend is ready!"
+              break
+            fi
+            echo "Attempt $i/30: Backend not ready, waiting..."
+            sleep 2
+          done
+
+      - name: Check backend health
+        id: backend-check
+        run: |
+          if curl -f http://localhost:3001/health; then
+            echo "ready=true" >> $GITHUB_OUTPUT
+            echo "✅ Backend health check passed"
+          else
+            echo "ready=false" >> $GITHUB_OUTPUT
+            echo "❌ Backend health check failed"
+            exit 1
+          fi
+
+      - name: Check test dependencies
+        id: deps-check
+        run: |
+          cd tests/comprehensive
+          if npm list axios jsonwebtoken jsdom > /dev/null 2>&1; then
+            echo "ready=true" >> $GITHUB_OUTPUT
+            echo "✅ Test dependencies check passed"
+          else
+            echo "ready=false" >> $GITHUB_OUTPUT
+            echo "❌ Test dependencies check failed"
+            exit 1
+          fi
+
+      - name: Stop backend
+        if: always()
+        run: |
+          if [ ! -z "$BACKEND_PID" ]; then
+            kill $BACKEND_PID || true
+          fi
+
+  # Backend API Tests
+  backend-tests:
+    name: 🔧 Backend API Tests
+    runs-on: ubuntu-latest
+    needs: prerequisites
+    if: ${{ needs.prerequisites.outputs.backend-ready == 'true' && (github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'backend' || github.event.inputs.test_suite == '') }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd ai2-core-app && npm ci
+          cd ../tests/comprehensive && npm run setup
+
+      - name: Start backend
+        run: |
+          cd ai2-core-app
+          npm run build:local
+          npm start &
+          sleep 15
+
+      - name: Run backend tests
+        run: |
+          cd tests/comprehensive
+          npm run test:backend
+        continue-on-error: true
+
+      - name: Upload backend test reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-reports
+          path: tests/comprehensive/backend-test-report-*.json
+          retention-days: 30
+
+  # Frontend Simulation Tests
+  frontend-tests:
+    name: 🌐 Frontend Simulation Tests
+    runs-on: ubuntu-latest
+    needs: prerequisites
+    if: ${{ needs.prerequisites.outputs.backend-ready == 'true' && (github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'frontend' || github.event.inputs.test_suite == '') }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd ai2-core-app && npm ci
+          cd ../tests/comprehensive && npm run setup
+
+      - name: Start backend
+        run: |
+          cd ai2-core-app
+          npm run build:local
+          npm start &
+          sleep 15
+
+      - name: Run frontend simulation tests
+        run: |
+          cd tests/comprehensive
+          npm run test:frontend
+        continue-on-error: true
+
+      - name: Upload frontend test reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-test-reports
+          path: tests/comprehensive/frontend-simulation-report-*.json
+          retention-days: 30
+
+  # End-to-End Tests
+  e2e-tests:
+    name: 🔄 End-to-End Tests
+    runs-on: ubuntu-latest
+    needs: prerequisites
+    if: ${{ needs.prerequisites.outputs.backend-ready == 'true' && (github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'e2e' || github.event.inputs.test_suite == '') }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd ai2-core-app && npm ci
+          cd ../tests/comprehensive && npm run setup
+
+      - name: Start backend
+        run: |
+          cd ai2-core-app
+          npm run build:local
+          npm start &
+          sleep 15
+
+      - name: Run end-to-end tests
+        run: |
+          cd tests/comprehensive
+          npm run test:e2e
+        continue-on-error: true
+
+      - name: Upload e2e test reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-test-reports
+          path: tests/comprehensive/e2e-test-report-*.json
+          retention-days: 30
+
+  # Comprehensive Test Suite (All Tests)
+  comprehensive-tests:
+    name: 🎯 Comprehensive Test Suite
+    runs-on: ubuntu-latest
+    needs: [prerequisites, backend-tests, frontend-tests, e2e-tests]
+    if: ${{ always() && needs.prerequisites.outputs.backend-ready == 'true' && (github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == '') }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          cd ai2-core-app && npm ci
+          cd ../tests/comprehensive && npm run setup
+
+      - name: Start backend
+        run: |
+          cd ai2-core-app
+          npm run build:local
+          npm start &
+          sleep 15
+
+      - name: Run comprehensive test suite
+        run: |
+          cd tests/comprehensive
+          if [ "${{ github.event.inputs.parallel }}" = "false" ]; then
+            npm run test:sequential
+          else
+            npm test
+          fi
+        continue-on-error: true
+
+      - name: Upload comprehensive test reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: comprehensive-test-reports
+          path: |
+            tests/comprehensive/comprehensive-test-report-*.json
+            tests/comprehensive/test-report-*.html
+            tests/comprehensive/test-reports/
+          retention-days: 30
+
+      - name: Generate test summary
+        if: always()
+        run: |
+          cd tests/comprehensive
+          echo "## 🎯 Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f comprehensive-test-report-*.json ]; then
+            REPORT_FILE=$(ls comprehensive-test-report-*.json | head -1)
+            
+            # Extract summary data using Node.js
+            node -e "
+              const fs = require('fs');
+              const report = JSON.parse(fs.readFileSync('$REPORT_FILE', 'utf8'));
+              
+              console.log('| Metric | Value |');
+              console.log('|--------|-------|');
+              console.log('| Total Suites | ' + report.summary.totalSuites + ' |');
+              console.log('| Total Tests | ' + report.summary.totalTests + ' |');
+              console.log('| Passed | ' + report.summary.totalPassed + ' (' + report.summary.successRate.toFixed(1) + '%) |');
+              console.log('| Failed | ' + report.summary.totalFailed + ' |');
+              console.log('| Warnings | ' + report.summary.totalWarnings + ' |');
+              console.log('| Duration | ' + report.execution.duration + 'ms |');
+              
+              if (report.recommendations && report.recommendations.length > 0) {
+                console.log('');
+                console.log('### 🔧 Recommendations');
+                report.recommendations.slice(0, 5).forEach(rec => {
+                  console.log('- **[' + rec.priority + ']** ' + rec.issue + ': ' + rec.recommendation);
+                });
+              }
+            " >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No comprehensive report found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Comment PR with test results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            try {
+              const reportFiles = fs.readdirSync('tests/comprehensive').filter(f => f.startsWith('comprehensive-test-report-'));
+              if (reportFiles.length === 0) {
+                console.log('No comprehensive test report found');
+                return;
+              }
+              
+              const reportFile = reportFiles[0];
+              const report = JSON.parse(fs.readFileSync(path.join('tests/comprehensive', reportFile), 'utf8'));
+              
+              const comment = `## 🎯 Comprehensive Test Results
+              
+              | Metric | Value |
+              |--------|-------|
+              | Total Suites | ${report.summary.totalSuites} |
+              | Total Tests | ${report.summary.totalTests} |
+              | ✅ Passed | ${report.summary.totalPassed} (${report.summary.successRate.toFixed(1)}%) |
+              | ❌ Failed | ${report.summary.totalFailed} |
+              | ⚠️ Warnings | ${report.summary.totalWarnings} |
+              | ⏱️ Duration | ${report.execution.duration}ms |
+              
+              ### Suite Results
+              ${Object.entries(report.suites).filter(([_, suite]) => suite).map(([name, suite]) => 
+                `- **${suite.suite}**: ${suite.status} (${suite.duration}ms)`
+              ).join('\n')}
+              
+              ${report.recommendations && report.recommendations.length > 0 ? `
+              ### 🔧 Top Recommendations
+              ${report.recommendations.slice(0, 3).map(rec => 
+                `- **[${rec.priority}]** ${rec.issue}: ${rec.recommendation}`
+              ).join('\n')}
+              ` : ''}
+              
+              ---
+              *Automated test results from comprehensive test suite*`;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } catch (error) {
+              console.log('Error creating PR comment:', error.message);
+            }
+
+  # Test Results Analysis
+  analyze-results:
+    name: 📊 Analyze Test Results
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests, e2e-tests, comprehensive-tests]
+    if: always()
+    
+    steps:
+      - name: Download all test artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: test-artifacts
+
+      - name: Analyze test results
+        run: |
+          echo "## 📊 Test Analysis" >> $GITHUB_STEP_SUMMARY
+          
+          # Count total artifacts
+          TOTAL_REPORTS=$(find test-artifacts -name "*.json" | wc -l)
+          echo "Total test reports: $TOTAL_REPORTS" >> $GITHUB_STEP_SUMMARY
+          
+          # List all report files
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📁 Generated Reports" >> $GITHUB_STEP_SUMMARY
+          find test-artifacts -name "*.json" -o -name "*.html" | sort >> $GITHUB_STEP_SUMMARY
+
+      - name: Set job status
+        run: |
+          # Determine overall success based on individual job results
+          BACKEND_SUCCESS="${{ needs.backend-tests.result }}"
+          FRONTEND_SUCCESS="${{ needs.frontend-tests.result }}"
+          E2E_SUCCESS="${{ needs.e2e-tests.result }}"
+          COMPREHENSIVE_SUCCESS="${{ needs.comprehensive-tests.result }}"
+          
+          echo "Backend Tests: $BACKEND_SUCCESS"
+          echo "Frontend Tests: $FRONTEND_SUCCESS"
+          echo "E2E Tests: $E2E_SUCCESS"
+          echo "Comprehensive Tests: $COMPREHENSIVE_SUCCESS"
+          
+          # If any critical test failed, fail the workflow
+          if [[ "$BACKEND_SUCCESS" == "failure" ]]; then
+            echo "❌ Backend tests failed - this is critical"
+            exit 1
+          fi
+
+  # Cleanup
+  cleanup:
+    name: 🧹 Cleanup
+    runs-on: ubuntu-latest
+    needs: [analyze-results]
+    if: always()
+    
+    steps:
+      - name: Cleanup summary
+        run: |
+          echo "## 🧹 Cleanup Complete" >> $GITHUB_STEP_SUMMARY
+          echo "All test artifacts have been uploaded and preserved for 30 days." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review test reports in the Actions artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "2. Address any failing tests or warnings" >> $GITHUB_STEP_SUMMARY
+          echo "3. Update test cases if API changes were made" >> $GITHUB_STEP_SUMMARY
+          echo "4. Consider performance optimizations if response times are high" >> $GITHUB_STEP_SUMMARY

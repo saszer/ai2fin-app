@@ -1,0 +1,45 @@
+{
+  "name": "ai2-comprehensive-tests",
+  "version": "1.0.0",
+  "description": "Comprehensive test suite for AI2 platform - backend, frontend simulation, and end-to-end tests",
+  "main": "test-runner.js",
+  "scripts": {
+    "test": "node test-runner.js",
+    "test:backend": "node test-runner.js --backend-only",
+    "test:frontend": "node test-runner.js --frontend-only",
+    "test:e2e": "node test-runner.js --e2e-only",
+    "test:sequential": "node test-runner.js --sequential",
+    "test:parallel": "node test-runner.js",
+    "test:quick": "node backend-api-tests.js",
+    "test:ci": "node test-runner.js --output=./ci-reports",
+    "install-deps": "npm install axios jsonwebtoken jsdom",
+    "setup": "npm run install-deps && mkdir -p test-reports ci-reports"
+  },
+  "dependencies": {
+    "axios": "^1.11.0",
+    "jsdom": "^23.2.0",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "keywords": [
+    "testing",
+    "api",
+    "frontend",
+    "e2e",
+    "authentication",
+    "automation",
+    "ci-cd"
+  ],
+  "author": "AI2 Platform",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/ai2-platform"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/ai2-platform/issues"
+  },
+  "homepage": "https://embracingearth.space"
+}
