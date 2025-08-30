@@ -38,6 +38,10 @@ kill_timeout = "5s"
     type = "connections"
     hard_limit = 25
     soft_limit = 20
+    
+  # Smart scaling based on user activity
+  [services.auto_stop_machines_options]
+    stop_after = "30m"       # Keep alive 30 minutes after last request
 
   [[services.tcp_checks]]
     interval = "300s"     # Cost-optimized: 5 minutes (was 15s)
