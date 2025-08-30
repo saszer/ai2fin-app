@@ -40,15 +40,15 @@ kill_timeout = "5s"
     soft_limit = 20
 
   [[services.tcp_checks]]
-    interval = "15s"
-    timeout = "2s"
-    grace_period = "1s"
+    interval = "300s"     # Cost-optimized: 5 minutes (was 15s)
+    timeout = "10s"       # Increased timeout for stability
+    grace_period = "30s"  # More grace time
     restart_limit = 0
 
   [[services.http_checks]]
-    interval = "10s"
-    timeout = "2s"
-    grace_period = "5s"
+    interval = "300s"     # Cost-optimized: 5 minutes (was 10s)
+    timeout = "10s"       # Increased timeout for stability
+    grace_period = "30s"  # More grace time
     method = "get"
     path = "/health"
     protocol = "http"
@@ -66,7 +66,8 @@ kill_timeout = "5s"
   worker = "node dist/worker.js"
 
 [[vm]]
-  memory = "512mb"
+  memory = "256mb"      # Cost-optimized for low traffic (was 512mb)
+  cpu_kind = "shared"   # Use shared CPU for cost savings
   cpus = 1
 
 [metrics]

@@ -29,12 +29,13 @@ primary_region = "iad"
     force_https = true
 
   [[services.http_checks]]
-    interval = "30s"
-    timeout = "5s"
-    grace_period = "10s"
+    interval = "300s"     # Cost-optimized: 5 minutes (was 30s)
+    timeout = "10s"       # Increased timeout for stability
+    grace_period = "30s"  # More grace time
     method = "get"
     path = "/health"
 
 [[vm]]
-  memory = "256mb"
+  memory = "256mb"       # Already optimized
+  cpu_kind = "shared"    # Use shared CPU for cost savings
   cpus = 1 

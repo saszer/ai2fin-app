@@ -24,12 +24,13 @@ primary_region = "iad"
     handlers = ["http"]
 
   [[services.http_checks]]
-    interval = "60s"
-    timeout = "10s"
-    grace_period = "30s"
+    interval = "600s"     # Cost-optimized: 10 minutes for preview (was 60s)
+    timeout = "15s"       # Increased timeout for preview stability
+    grace_period = "60s"  # More grace time for preview
     method = "get"
     path = "/health"
 
 [[vm]]
-  memory = "256mb"
+  memory = "256mb"       # Already optimized for preview
+  cpu_kind = "shared"    # Use shared CPU for cost savings
   cpus = 1 
