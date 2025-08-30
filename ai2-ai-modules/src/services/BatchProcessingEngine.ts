@@ -19,6 +19,7 @@ import { TransactionClassificationAIAgent } from './TransactionClassificationAIA
 import { AIConfig } from '../types/ai-types';
 import { AIDataContext } from './BaseAIService';
 import { logger } from './LoggingService';
+import aiLogger from '../logger'; // Use local AI modules logger - embracingearth.space
 
 export interface BatchTransaction {
   id: string;
@@ -315,6 +316,17 @@ export class BatchProcessingEngine {
       logger.warn('BatchProcessingEngine', 'No AI agent available, using mock results', {
         transactionCount: transactions.length
       });
+      
+      // 🔗 Log mock operation (not a real AI call)
+      aiLogger.warn('Mock AI Operation', {
+        operation: 'BatchCategorizationMock',
+        model: 'mock',
+        transactionCount: transactions.length,
+        totalAmount: transactions.reduce((sum, t) => sum + Math.abs(t.amount), 0),
+        reason: 'No OpenAI API key configured',
+        isRealAICall: false
+      });
+      
       return this.generateMockAIResults(transactions);
     }
     
@@ -674,19 +686,35 @@ Apply this SAME consistent logic to classify:`
         throw new Error('No response from AI');
       }
 
+      const duration = Date.now() - startTime;
+      const tokenCount = response.usage?.total_tokens || 0;
+
+      // 🔗 MAXIMUM VISIBILITY: Log to AI monitoring system (embracingearth.space)
+      aiLogger.info('AI Batch Categorization Completed', {
+        operation: 'BatchCategorization',
+        model: modelToUse,
+        tokenCount,
+        responseTime: duration,
+        success: true,
+        userId: context.userId,
+        transactionCount: transactions.length,
+        totalAmount: transactions.reduce((sum, t) => sum + Math.abs(t.amount), 0),
+        categories: selectedCategories,
+        isRealAICall: true
+      });
+
       // Enterprise: Validate response consistency
       const responseHash = this.generateResponseHash(optimizedTransactions, userProfileContext);
       console.log(`🔍 Response hash for consistency tracking: ${responseHash}`);
 
-      // Log the API response with actual content
-      const duration = Date.now() - startTime;
+      // Log the API response with actual content (legacy logging)
       const estimatedCost = this.estimateBatchCost(transactions.length);
       logger.logApiResponse(
         'BatchProcessingEngine',
         'openai/chat/completions',
         'POST',
         {
-          model: 'gpt-4',
+          model: modelToUse,
           usage: {
             prompt_tokens: response.usage?.prompt_tokens || 0,
             completion_tokens: response.usage?.completion_tokens || 0,
@@ -735,6 +763,19 @@ Apply this SAME consistent logic to classify:`
       });
 
     } catch (error) {
+      const duration = Date.now() - startTime;
+      
+      // 🔗 MAXIMUM VISIBILITY: Log error to AI monitoring system
+      aiLogger.error('AI Batch Operation Failed', {
+        operation: 'BatchCategorization',
+        model: 'gpt-4', // fallback model name since modelToUse is out of scope
+        responseTime: duration,
+        userId: context.userId,
+        error: (error as Error).message,
+        transactionCount: transactions.length,
+        isRealAICall: true
+      });
+      
       console.error('❌ Enhanced categorization failed:', error);
       
       // Return enhanced fallback categorizations using user profile
