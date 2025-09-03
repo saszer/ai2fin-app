@@ -559,31 +559,24 @@ export class BatchProcessingEngine {
     console.log(`AI Context Input: "${aiContextInput}"`);
     console.log('===================================================');
     
-    // Build comprehensive user profile context with enhanced details
-    const userProfileContext = [
-      `Business Type: ${businessType}`,
-      `Industry: ${industry}`,
-      profession ? `Profession: ${profession}` : null,
-      countryCode ? `Country: ${countryCode}` : null,
-      aiContextInput ? `User Context: ${aiContextInput}` : null
-    ].filter(Boolean).join('\n');
+    // 🧠 CLEAN PSYCHOLOGY INTEGRATION - No duplication (embracingearth.space)
+    const prompt = `Categorize financial transactions based on user's business context.
 
-    // Create enhanced categorization prompt with comprehensive user context
-    const prompt = `Categorizes financial transactions accurately and concisely.
+BUSINESS PROFILE:
+• Type: ${businessType}
+• Industry: ${industry}
+${profession ? `• Profession: ${profession}` : ''}
+${countryCode ? `• Country: ${countryCode}` : ''}
 
-    Help categorize financial transactions based on user's business profile and preferences.
+${aiContextInput ? `PSYCHOLOGY CONTEXT: "${aiContextInput}"
+Use this to understand the user's business patterns, decision-making style, and expense habits.` : ''}
 
-COMPREHENSIVE USER PROFILE:
-${userProfileContext}
+AVAILABLE CATEGORIES: ${selectedCategories.length > 0 ? selectedCategories.join(', ') : 'Suggest appropriate categories'}
 
-SELECTED CATEGORIES: ${selectedCategories.length > 0 ? selectedCategories.join(', ') : 'OPEN CATEGORIZATION - Suggest best categories based on user profile'}
-
-TRANSACTION DATA:
+TRANSACTIONS:
 ${JSON.stringify(optimizedTransactions, null, 2)}
 
-Consider the user's business type, industry, profession, country, and personal context when categorizing transactions. For each transaction, assign to the MOST APPROPRIATE category from the user's categories, treat as one category between each comma. If a transaction could fit multiple categories, choose the BEST match based on the user's context but do not try to fit user categories, suggest a new category if not fitting easily.
-
-${aiContextInput ? `\n\nUSER PSYCHOLOGY CONTEXT: "${aiContextInput}" - Use this to understand the user's business patterns, decision-making style, and expense habits for more accurate categorization.` : ''}
+Categorize each transaction considering the user's business context and psychology. Choose the most appropriate category or suggest new ones if needed.
 Try to think what payment is for and any hints from businuess names in description.
 
 Respond with a JSON array where each element corresponds to a transaction in order:
@@ -601,12 +594,11 @@ Respond with a JSON array where each element corresponds to a transaction in ord
     try {
       console.log(`🤖 Sending enhanced categorization request for ${transactions.length} transactions`);
       
-      // Debug: Log the complete enhanced user profile context
-      console.log('🔍 DEBUG - Enhanced User Profile Context Being Sent:');
+      // Debug: Log the clean user profile context
+      console.log('🔍 DEBUG - Clean User Profile Context Being Sent:');
       console.log('===================================================');
-      console.log(userProfileContext);
-      console.log('Business Classification Context:', businessType, profession, industry, countryCode);
-      console.log('User AI Context:', aiContextInput);
+      console.log(`Business Type: ${businessType}, Industry: ${industry}, Profession: ${profession}`);
+      console.log(`Country: ${countryCode}, Psychology Length: ${aiContextInput?.length || 0} chars`);
       console.log('===================================================');
       
       // Debug: Log the complete prompt
@@ -704,7 +696,7 @@ Apply this SAME consistent logic to classify:`
       });
 
       // Enterprise: Validate response consistency
-      const responseHash = this.generateResponseHash(optimizedTransactions, userProfileContext);
+      const responseHash = this.generateResponseHash(optimizedTransactions, `${businessType}_${industry}_${aiContextInput?.substring(0, 50) || ''}`);
       console.log(`🔍 Response hash for consistency tracking: ${responseHash}`);
 
       // Log the API response with actual content (legacy logging)
