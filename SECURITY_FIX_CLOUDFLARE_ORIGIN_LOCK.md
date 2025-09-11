@@ -1,14 +1,5 @@
 # 🚨 URGENT: Enable Cloudflare Origin Lock
 
-## Problem Identified
-Your Fly.io backend is receiving traffic from multiple regions, indicating potential **direct access bypassing Cloudflare**. This is a security risk.
-
-## Current Configuration
-- ✅ Frontend: Cloudflare Sydney (`app.ai2fin.com`)  
-- ✅ Backend: Fly.io Sydney (`ai2-core-api.fly.dev`)
-- ❌ **Origin Lock: DISABLED** - Anyone can access Fly.io directly
-
-## Security Risk
 ```
 Expected:  User → Cloudflare → Fly.io
 Reality:   User → Cloudflare → Fly.io
@@ -50,10 +41,10 @@ fly deploy -a ai2-core-api
 ### Test Origin Lock is Working
 ```bash
 # This should FAIL (403 Forbidden)
-curl -I https://ai2-core-api.fly.dev/health
+curl -I https://ai2-production.fly.dev/health
 
 # This should WORK (200 OK) 
-curl -I https://app.ai2fin.com/health
+curl -I https://api.ai2fin.com/health
 ```
 
 ### Monitor Traffic Sources

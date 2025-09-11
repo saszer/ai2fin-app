@@ -82,20 +82,35 @@ interface ExportPreview {
   unlinkedBillsAmount: number;
 }
 
-// Helper function to process transactions for ATO format
+// Helper function to process transactions for ATO format (OPTIMIZED for large datasets)
 function processTransactionsForATO(transactions: Transaction[], trips?: Trip[], vehicles?: Vehicle[], unlinkedBills?: UnlinkedBillOccurrence[]): ExportPreview {
-  const income = transactions.filter(t => 
-    t.primaryType === 'income' && (t.isTaxDeductible || t.expenseType === 'business')
-  );
+  // PERFORMANCE OPTIMIZATION: Single pass through transactions to avoid multiple filters
+  let totalIncome = 0;
+  let totalExpenses = 0;
+  let businessExpenses = 0;
+  let employeeExpenses = 0;
+  const income: Transaction[] = [];
+  const expenses: Transaction[] = [];
   
-  const expenses = transactions.filter(t => 
-    t.primaryType === 'expense' && t.isTaxDeductible
-  );
-
-  const totalIncome = income.reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  const totalExpenses = expenses.reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  const businessExpenses = expenses.filter(t => t.expenseType === 'business' || !t.expenseType).reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  const employeeExpenses = expenses.filter(t => t.expenseType === 'employee').reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  // Single loop through all transactions for better performance
+  for (const t of transactions) {
+    const amount = Math.abs(t.amount);
+    
+    if (t.primaryType === 'income' && (t.isTaxDeductible || t.expenseType === 'business')) {
+      income.push(t);
+      totalIncome += amount;
+    } else if (t.primaryType === 'expense' && t.isTaxDeductible) {
+      expenses.push(t);
+      totalExpenses += amount;
+      
+      // Categorize expense types in the same loop
+      if (t.expenseType === 'business' || !t.expenseType) {
+        businessExpenses += amount;
+      } else if (t.expenseType === 'employee') {
+        employeeExpenses += amount;
+      }
+    }
+  }
 
   const totalTrips = trips?.length || 0;
   const totalDistance = trips?.reduce((sum, t) => sum + t.totalKm, 0) || 0;
@@ -143,26 +158,35 @@ function formatDateForATO(dateString: string): string {
   }
 }
 
-// Helper function to generate ATO CSV content with travel data and unlinked bills
+// Helper function to generate ATO CSV content with travel data and unlinked bills (OPTIMIZED)
 function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Vehicle[], startDate: string, endDate: string, unlinkedBills?: UnlinkedBillOccurrence[]): string {
   const processed = processTransactionsForATO(transactions, trips, vehicles, unlinkedBills);
   
-  let csv = `Date: ${format(new Date(), 'dd/MM/yyyy HH:mm:ss')}\n`;
-  csv += `ATO app - myDeductions\n\n`;
+  // PERFORMANCE FIX: Use array and join() instead of string concatenation
+  const csvLines: string[] = [];
+  
+  // Header
+  csvLines.push(`Date: ${format(new Date(), 'dd/MM/yyyy HH:mm:ss')}`);
+  csvLines.push(`ATO app - myDeductions`);
+  csvLines.push('');
   
   // Income section
-  csv += `Income\n`;
-  csv += `Uploaded,Type,Status,Date,Amount,GST included,Description,Reference,Payment method,"Photo reference*"\n`;
+  csvLines.push(`Income`);
+  csvLines.push(`Uploaded,Type,Status,Date,Amount,GST included,Description,Reference,Payment method,"Photo reference*"`);
   
+  // Process income transactions
   for (const income of processed.income) {
     const amount = Math.abs(income.amount);
     const gst = income.gstAmount || (amount * 0.1); // Default 10% GST if not specified
-    csv += `Not uploaded,Business,Completed,${formatDateForATO(income.date)},${amount.toFixed(2)},${gst.toFixed(2)},"${income.description}","${income.reference || ''}",,,\n`;
+    csvLines.push(`Not uploaded,Business,Completed,${formatDateForATO(income.date)},${amount.toFixed(2)},${gst.toFixed(2)},"${income.description}","${income.reference || ''}",,,`);
   }
   
-  csv += `\nExpenses\n`;
-  csv += `Uploaded,Type,Status,Date,Amount,"GST included*",Description,% Claimable,Expense type,Expense sub-type*,Vehicle*,Photo reference*\n`;
+  // Expenses section
+  csvLines.push('');
+  csvLines.push(`Expenses`);
+  csvLines.push(`Uploaded,Type,Status,Date,Amount,"GST included*",Description,% Claimable,Expense type,Expense sub-type*,Vehicle*,Photo reference*`);
   
+  // Process expense transactions
   for (const expense of processed.expenses) {
     const amount = Math.abs(expense.amount);
     const gst = expense.gstAmount || '';
@@ -171,7 +195,7 @@ function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Ve
     const subType = expense.expenseType === 'employee' ? 'Other work-related' : 'All other expenses';
     const subTypeDetail = expense.expenseType === 'employee' ? 'Other' : '';
     
-    csv += `Not uploaded,${type},Completed,${formatDateForATO(expense.date)},${amount.toFixed(2)},${gst ? gst.toFixed(2) : ''},"${expense.description}",${percentage}%,"${subType}","${subTypeDetail}",,,\n`;
+    csvLines.push(`Not uploaded,${type},Completed,${formatDateForATO(expense.date)},${amount.toFixed(2)},${gst ? gst.toFixed(2) : ''},"${expense.description}",${percentage}%,"${subType}","${subTypeDetail}",,,`);
   }
 
   // Add unlinked bills as estimated expenses
@@ -183,12 +207,13 @@ function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Ve
     const subTypeDetail = bill.expenseType === 'employee' ? 'Other' : '';
     const description = `${bill.billPatternName} - ${bill.frequency} pattern occurrence (Not linked to bank transaction)`;
     
-    csv += `Not uploaded,${type},Completed,${formatDateForATO(bill.dueDate)},${amount.toFixed(2)},,"${description}",${percentage}%,"${subType}","${subTypeDetail}",,,\n`;
+    csvLines.push(`Not uploaded,${type},Completed,${formatDateForATO(bill.dueDate)},${amount.toFixed(2)},,"${description}",${percentage}%,"${subType}","${subTypeDetail}",,,`);
   }
   
   // Trips section
-  csv += `\nTrips\n`;
-  csv += `Uploaded,Type,Status,Date,Vehicle,Purpose of trip,Start odometer*,End odometer*,Start location#,End location#,Trip details,Trip distance*,Record multiple trips*,Record the return journey*,Total Km,Logbook trip\n`;
+  csvLines.push('');
+  csvLines.push(`Trips`);
+  csvLines.push(`Uploaded,Type,Status,Date,Vehicle,Purpose of trip,Start odometer*,End odometer*,Start location#,End location#,Trip details,Trip distance*,Record multiple trips*,Record the return journey*,Total Km,Logbook trip`);
   
   for (const trip of processed.trips) {
     const tripType = trip.tripType === 'BUSINESS' ? 'Business' : 'Employee';
@@ -196,28 +221,33 @@ function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Ve
     const returnJourney = trip.isReturnJourney ? 'Yes' : 'No';
     const logbookTrip = trip.isLogbookTrip ? 'Y' : 'N';
     
-    csv += `Not uploaded,${tripType},Completed,${formatDateForATO(trip.tripDate)},${trip.vehicle.registration},${trip.purpose},${trip.startOdometer.toFixed(2)},${trip.endOdometer.toFixed(2)},${trip.startLocation || ''},${trip.endLocation || ''},"${trip.tripDetails}",${trip.distanceKm.toFixed(2)},${multipleTrips},${returnJourney},${trip.totalKm.toFixed(2)},${logbookTrip}\n`;
+    csvLines.push(`Not uploaded,${tripType},Completed,${formatDateForATO(trip.tripDate)},${trip.vehicle.registration},${trip.purpose},${trip.startOdometer.toFixed(2)},${trip.endOdometer.toFixed(2)},${trip.startLocation || ''},${trip.endLocation || ''},"${trip.tripDetails}",${trip.distanceKm.toFixed(2)},${multipleTrips},${returnJourney},${trip.totalKm.toFixed(2)},${logbookTrip}`);
   }
   
   // Vehicles section
-  csv += `\nVehicles\n`;
-  csv += `Registration,Description,Ownership,Vehicle type\n`;
+  csvLines.push('');
+  csvLines.push(`Vehicles`);
+  csvLines.push(`Registration,Description,Ownership,Vehicle type`);
   
   for (const vehicle of processed.vehicles) {
     const ownership = vehicle.ownership === 'OWNED' ? 'I own lease or hire-purchase' : 
                      vehicle.ownership === 'LEASED' ? 'Leased' : 
                      vehicle.ownership === 'HIRE_PURCHASE' ? 'Hire Purchase' : vehicle.ownership;
     
-    csv += `${vehicle.registration},"${vehicle.description}",${ownership},${vehicle.vehicleType},\n`;
+    csvLines.push(`${vehicle.registration},"${vehicle.description}",${ownership},${vehicle.vehicleType},`);
   }
   
-  csv += `\n"* If applicable to expense or trip type."\n`;
+  csvLines.push('');
+  csvLines.push(`"* If applicable to expense or trip type."`);
   
-  return csv;
+  // PERFORMANCE FIX: Single join() operation instead of multiple string concatenations
+  return csvLines.join('\n');
 }
 
 // Generate ATO myDeductions export with travel data
 router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     const { startDate, endDate, transactions, trips, vehicles, unlinkedBills } = req.body;
     
@@ -229,28 +259,45 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
       });
     }
 
+    // PERFORMANCE SAFEGUARD: Limit transaction processing to prevent timeouts
+    const maxTransactions = 5000;
+    const limitedTransactions = transactions.slice(0, maxTransactions);
+    
+    if (transactions.length > maxTransactions) {
+      console.warn(`⚠️ Large dataset detected: ${transactions.length} transactions, limiting to ${maxTransactions} for performance`);
+    }
+
+    console.log(`🔄 Generating ATO CSV for ${limitedTransactions.length} transactions...`);
+    
     // Generate CSV content using real transaction data, travel data, and unlinked bills
-    const csvContent = generateATOCSV(transactions, trips || [], vehicles || [], startDate, endDate, unlinkedBills || []);
+    const csvContent = generateATOCSV(limitedTransactions, trips || [], vehicles || [], startDate, endDate, unlinkedBills || []);
     const filename = `ATO_myDeductions_${format(new Date(startDate), 'yyyy-MM-dd')}_to_${format(new Date(endDate), 'yyyy-MM-dd')}.csv`;
+    
+    const processingTime = Date.now() - startTime;
+    console.log(`✅ ATO CSV generation completed in ${processingTime}ms`);
 
     res.json({
       success: true,
       data: {
         csvContent,
         filename,
-        recordCount: transactions.length,
+        recordCount: limitedTransactions.length,
+        totalRecords: transactions.length,
         tripCount: trips?.length || 0,
         vehicleCount: vehicles?.length || 0,
         unlinkedBillCount: unlinkedBills?.length || 0,
-        preview: processTransactionsForATO(transactions, trips, vehicles, unlinkedBills)
+        preview: processTransactionsForATO(limitedTransactions, trips, vehicles, unlinkedBills),
+        processingTimeMs: processingTime
       },
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('ATO export error:', error);
+    const processingTime = Date.now() - startTime;
+    console.error(`❌ ATO export error after ${processingTime}ms:`, error);
     res.status(500).json({
       success: false,
       error: 'Failed to generate ATO export',
+      processingTimeMs: processingTime,
       timestamp: new Date().toISOString()
     });
   }
@@ -258,6 +305,8 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
 
 // Get export preview data (processes real transactions passed from frontend)
 router.post('/api/analytics/export/preview', async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     const { startDate, endDate, transactions, trips, vehicles, unlinkedBills } = req.body;
     
@@ -269,19 +318,37 @@ router.post('/api/analytics/export/preview', async (req, res) => {
       });
     }
 
+    // PERFORMANCE SAFEGUARD: Limit transaction processing to prevent timeouts
+    const maxTransactions = 5000;
+    const limitedTransactions = transactions.slice(0, maxTransactions);
+    
+    if (transactions.length > maxTransactions) {
+      console.warn(`⚠️ Large dataset detected: ${transactions.length} transactions, limiting to ${maxTransactions} for performance`);
+    }
+
+    console.log(`🔄 Processing ${limitedTransactions.length} transactions for ATO export preview...`);
+    
     // Process real transaction data for preview including unlinked bills
-    const previewData = processTransactionsForATO(transactions, trips, vehicles, unlinkedBills);
+    const previewData = processTransactionsForATO(limitedTransactions, trips, vehicles, unlinkedBills);
+    
+    const processingTime = Date.now() - startTime;
+    console.log(`✅ ATO export preview completed in ${processingTime}ms`);
 
     res.json({
       success: true,
       data: previewData,
+      processingTimeMs: processingTime,
+      totalTransactions: transactions.length,
+      processedTransactions: limitedTransactions.length,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Export preview error:', error);
+    const processingTime = Date.now() - startTime;
+    console.error(`❌ Export preview error after ${processingTime}ms:`, error);
     res.status(500).json({
       success: false,
       error: 'Failed to generate export preview',
+      processingTimeMs: processingTime,
       timestamp: new Date().toISOString()
     });
   }

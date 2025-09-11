@@ -1,6 +1,6 @@
 # Main production configuration for AI2 platform
 app = "ai2-production"
-primary_region = "iad"
+primary_region = "syd"
 kill_signal = "SIGINT"
 kill_timeout = "5s"
 
