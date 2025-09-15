@@ -113,12 +113,49 @@ const analyticsRateLimit = rateLimit({
   skip: (req) => req.path === '/health'
 });
 
+// ENTERPRISE CONCURRENT REQUEST LIMITING: Prevent server overload
+const activeRequests = new Map();
+const MAX_CONCURRENT_EXPORTS = 5; // Maximum concurrent export requests
+
+const concurrentLimitMiddleware = (req: any, res: any, next: any) => {
+  const userId = req.headers['x-user-id'] || req.ip;
+  const requestKey = `${userId}-${Date.now()}`;
+  
+  // Check if user has too many active requests
+  const userActiveRequests = Array.from(activeRequests.keys()).filter(key => key.startsWith(userId));
+  if (userActiveRequests.length >= MAX_CONCURRENT_EXPORTS) {
+    return res.status(429).json({
+      success: false,
+      error: 'Too many concurrent export requests. Please wait for current exports to complete.',
+      retryAfter: '30 seconds'
+    });
+  }
+  
+  // Track this request
+  activeRequests.set(requestKey, { startTime: Date.now(), userId });
+  
+  // Clean up when request completes
+  res.on('finish', () => {
+    activeRequests.delete(requestKey);
+  });
+  
+  res.on('close', () => {
+    activeRequests.delete(requestKey);
+  });
+  
+  next();
+};
+
 // Apply rate limiting to analytics endpoints
 app.use('/api/analytics', analyticsRateLimit);
 
-// ENTERPRISE CACHING: In-memory cache for processed data
+// Apply concurrent limiting to export endpoints
+app.use('/api/analytics/export', concurrentLimitMiddleware);
+
+// ENTERPRISE CACHING: In-memory cache for processed data with memory leak prevention
 const cache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MAX_CACHE_SIZE = 50; // Reduced to prevent memory issues
 
 const getCacheKey = (req: any) => {
   const { startDate, endDate, page, pageSize } = req.body;
@@ -135,17 +172,42 @@ const getCachedData = (key: string) => {
 };
 
 const setCachedData = (key: string, data: any) => {
+  // ENTERPRISE MEMORY MANAGEMENT: Prevent memory leaks
+  if (cache.size >= MAX_CACHE_SIZE) {
+    // Remove oldest entries (LRU-style cleanup)
+    const entries = Array.from(cache.entries());
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+    
+    // Remove oldest 25% of entries
+    const toRemove = Math.floor(MAX_CACHE_SIZE * 0.25);
+    for (let i = 0; i < toRemove; i++) {
+      cache.delete(entries[i][0]);
+    }
+  }
+  
   cache.set(key, {
     data,
     timestamp: Date.now()
   });
-  
-  // Clean up old cache entries
-  if (cache.size > 100) {
-    const oldestKey = cache.keys().next().value;
-    cache.delete(oldestKey);
-  }
 };
+
+// ENTERPRISE MEMORY CLEANUP: Periodic cache cleanup
+setInterval(() => {
+  const now = Date.now();
+  const expiredKeys = [];
+  
+  for (const [key, value] of cache.entries()) {
+    if (now - value.timestamp > CACHE_TTL) {
+      expiredKeys.push(key);
+    }
+  }
+  
+  expiredKeys.forEach(key => cache.delete(key));
+  
+  if (expiredKeys.length > 0) {
+    console.log(`🧹 Cache cleanup: Removed ${expiredKeys.length} expired entries`);
+  }
+}, 60000); // Clean up every minute
 
 // 📝 HTTP Request Logging Middleware
 app.use((req, res, next) => {

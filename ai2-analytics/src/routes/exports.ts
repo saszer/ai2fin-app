@@ -258,6 +258,16 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
   const startTime = Date.now();
   
   try {
+    // ENTERPRISE SECURITY: Extract user ID from request headers
+    const userId = req.headers['x-user-id'] as string;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'User authentication required for export',
+        timestamp: new Date().toISOString()
+      });
+    }
+
     const { startDate, endDate, transactions, trips, vehicles, unlinkedBills } = req.body;
     
     if (!startDate || !endDate || !transactions) {
@@ -278,12 +288,68 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
 
     console.log(`🔄 Generating ATO CSV for ${limitedTransactions.length} transactions...`);
     
+    // ENTERPRISE QUOTA: Check export quota before processing
+    try {
+      const quotaResponse = await fetch(`${process.env.CORE_APP_URL || 'http://localhost:3001'}/api/quota/check`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': req.headers.authorization || '',
+          'X-User-ID': userId
+        },
+        body: JSON.stringify({
+          feature: 'exports',
+          amount: 1
+        })
+      });
+      
+      if (!quotaResponse.ok) {
+        const quotaError = await quotaResponse.json();
+        return res.status(429).json({
+          success: false,
+          error: 'Export quota exceeded',
+          details: quotaError.error,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      console.log('✅ Export quota check passed');
+    } catch (quotaError) {
+      console.warn('⚠️ Quota check failed, proceeding without enforcement:', quotaError);
+      // Continue without quota enforcement in case of service unavailability
+    }
+    
     // Generate CSV content using real transaction data, travel data, and unlinked bills
     const csvContent = generateATOCSV(limitedTransactions, trips || [], vehicles || [], startDate, endDate, unlinkedBills || []);
     const filename = `ATO_myDeductions_${format(new Date(startDate), 'yyyy-MM-dd')}_to_${format(new Date(endDate), 'yyyy-MM-dd')}.csv`;
     
     const processingTime = Date.now() - startTime;
     console.log(`✅ ATO CSV generation completed in ${processingTime}ms`);
+
+    // ENTERPRISE QUOTA: Consume export quota after successful generation
+    try {
+      await fetch(`${process.env.CORE_APP_URL || 'http://localhost:3001'}/api/quota/consume`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': req.headers.authorization || '',
+          'X-User-ID': userId
+        },
+        body: JSON.stringify({
+          feature: 'exports',
+          amount: 1,
+          metadata: {
+            transactionCount: limitedTransactions.length,
+            processingTimeMs: processingTime,
+            exportType: 'ato-mydeductions'
+          }
+        })
+      });
+      console.log('✅ Export quota consumed successfully');
+    } catch (quotaError) {
+      console.warn('⚠️ Quota consumption failed:', quotaError);
+      // Don't fail the export if quota consumption fails
+    }
 
     res.json({
       success: true,
