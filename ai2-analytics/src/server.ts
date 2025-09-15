@@ -97,11 +97,11 @@ app.use((req, res, next) => {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' })); // Increased limit for large datasets (2K+ transactions)
 
-// ENTERPRISE RATE LIMITING: Prevent concurrency spikes
+// ENTERPRISE RATE LIMITING: Optimized for large datasets
 const rateLimit = require('express-rate-limit');
 const analyticsRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 1000, // Increased to 1000 requests per 15 minutes for large datasets
   message: {
     success: false,
     error: 'Too many requests from this IP, please try again later.',
@@ -110,6 +110,28 @@ const analyticsRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Skip rate limiting for health checks
+  skip: (req) => req.path === '/health',
+  // ENTERPRISE OPTIMIZATION: More lenient for export endpoints
+  keyGenerator: (req) => {
+    // Different limits for different endpoint types
+    if (req.path.includes('/export/')) {
+      return `export:${req.ip}`; // Separate bucket for exports
+    }
+    return req.ip; // Default bucket for other requests
+  }
+});
+
+// ENTERPRISE EXPORT RATE LIMITING: Special limits for export endpoints
+const exportRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200, // 200 export requests per 15 minutes per IP
+  message: {
+    success: false,
+    error: 'Too many export requests. Please wait before trying again.',
+    retryAfter: '15 minutes'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
   skip: (req) => req.path === '/health'
 });
 
@@ -148,6 +170,9 @@ const concurrentLimitMiddleware = (req: any, res: any, next: any) => {
 
 // Apply rate limiting to analytics endpoints
 app.use('/api/analytics', analyticsRateLimit);
+
+// Apply export-specific rate limiting to export endpoints
+app.use('/api/analytics/export', exportRateLimit);
 
 // Apply concurrent limiting to export endpoints
 app.use('/api/analytics/export', concurrentLimitMiddleware);

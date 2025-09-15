@@ -308,7 +308,7 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
         return res.status(429).json({
           success: false,
           error: 'Export quota exceeded',
-          details: quotaError.error,
+          details: (quotaError as any).error || 'Quota check failed',
           timestamp: new Date().toISOString()
         });
       }
