@@ -122,7 +122,7 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     features: {
       advancedReporting: process.env.ENABLE_ADVANCED_REPORTING === 'true',
-      exports: process.env.ENABLE_EXPORTS === 'true',
+      exports: true, // CRITICAL FIX: Always enable exports for ATO functionality
       insights: process.env.ENABLE_INSIGHTS === 'true',
       atoExports: true // embracingearth.space - ATO myDeductions export support
     }
