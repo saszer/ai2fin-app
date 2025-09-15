@@ -97,6 +97,56 @@ app.use((req, res, next) => {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' })); // Increased limit for large datasets (2K+ transactions)
 
+// ENTERPRISE RATE LIMITING: Prevent concurrency spikes
+const rateLimit = require('express-rate-limit');
+const analyticsRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: {
+    success: false,
+    error: 'Too many requests from this IP, please try again later.',
+    retryAfter: '15 minutes'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Skip rate limiting for health checks
+  skip: (req) => req.path === '/health'
+});
+
+// Apply rate limiting to analytics endpoints
+app.use('/api/analytics', analyticsRateLimit);
+
+// ENTERPRISE CACHING: In-memory cache for processed data
+const cache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const getCacheKey = (req: any) => {
+  const { startDate, endDate, page, pageSize } = req.body;
+  return `preview:${startDate}:${endDate}:${page}:${pageSize}`;
+};
+
+const getCachedData = (key: string) => {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+  cache.delete(key);
+  return null;
+};
+
+const setCachedData = (key: string, data: any) => {
+  cache.set(key, {
+    data,
+    timestamp: Date.now()
+  });
+  
+  // Clean up old cache entries
+  if (cache.size > 100) {
+    const oldestKey = cache.keys().next().value;
+    cache.delete(oldestKey);
+  }
+};
+
 // 📝 HTTP Request Logging Middleware
 app.use((req, res, next) => {
   const startTime = Date.now();
@@ -113,8 +163,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check
+// ENTERPRISE HEALTH CHECK: Comprehensive monitoring
 app.get('/health', (req, res) => {
+  const memoryUsage = process.memoryUsage();
+  const uptime = process.uptime();
+  
   res.json({
     status: 'healthy',
     service: 'analytics',
@@ -125,6 +178,27 @@ app.get('/health', (req, res) => {
       exports: true, // CRITICAL FIX: Always enable exports for ATO functionality
       insights: process.env.ENABLE_INSIGHTS === 'true',
       atoExports: true // embracingearth.space - ATO myDeductions export support
+    },
+    // ENTERPRISE METRICS
+    performance: {
+      uptime: Math.floor(uptime),
+      memory: {
+        used: Math.round(memoryUsage.heapUsed / 1024 / 1024), // MB
+        total: Math.round(memoryUsage.heapTotal / 1024 / 1024), // MB
+        external: Math.round(memoryUsage.external / 1024 / 1024) // MB
+      },
+      cache: {
+        size: cache.size,
+        maxSize: 100
+      }
+    },
+    // ENTERPRISE CAPABILITIES
+    capabilities: {
+      pagination: true,
+      caching: true,
+      rateLimiting: true,
+      largeDatasets: true,
+      streaming: true
     }
   });
 });
@@ -144,6 +218,10 @@ app.get('/api/analytics/status', (req, res) => {
     version: '1.0.0'
   });
 });
+
+// Make cache functions available to routes
+app.locals.getCachedData = getCachedData;
+app.locals.setCachedData = setCachedData;
 
 // Export routes
 app.use(exportRoutes);

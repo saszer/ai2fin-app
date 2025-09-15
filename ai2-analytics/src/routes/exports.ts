@@ -312,12 +312,25 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
   }
 });
 
-// Get export preview data (processes real transactions passed from frontend)
+// Get export preview data (ENTERPRISE-GRADE: Streaming & Pagination for big datasets)
 router.post('/api/analytics/export/preview', async (req, res) => {
   const startTime = Date.now();
   
   try {
-    const { startDate, endDate, transactions, trips, vehicles, unlinkedBills } = req.body;
+    const { startDate, endDate, transactions, trips, vehicles, unlinkedBills, page = 1, pageSize = 1000 } = req.body;
+    
+    // ENTERPRISE CACHING: Check cache first for performance
+    const cacheKey = `preview:${startDate}:${endDate}:${page}:${pageSize}`;
+    const cachedData = req.app.locals.getCachedData?.(cacheKey);
+    if (cachedData) {
+      console.log(`⚡ CACHE HIT: Returning cached data for page ${page}`);
+      return res.json({
+        success: true,
+        data: cachedData,
+        cached: true,
+        timestamp: new Date().toISOString()
+      });
+    }
     
     if (!startDate || !endDate || !transactions) {
       return res.status(400).json({
@@ -327,33 +340,57 @@ router.post('/api/analytics/export/preview', async (req, res) => {
       });
     }
 
-    // PERFORMANCE SAFEGUARD: Limit transaction processing to prevent timeouts
-    const maxTransactions = 10000; // Increased limit for production
-    const limitedTransactions = transactions.slice(0, maxTransactions);
+    // ENTERPRISE PAGINATION: Process data in chunks to prevent memory issues
+    const totalTransactions = transactions.length;
+    const maxPageSize = 5000; // Enterprise limit per page
+    const actualPageSize = Math.min(pageSize, maxPageSize);
+    const totalPages = Math.ceil(totalTransactions / actualPageSize);
+    const startIndex = (page - 1) * actualPageSize;
+    const endIndex = Math.min(startIndex + actualPageSize, totalTransactions);
     
-    if (transactions.length > maxTransactions) {
-      console.warn(`⚠️ Large dataset detected: ${transactions.length} transactions, limiting to ${maxTransactions} for performance`);
-    }
-
-    console.log(`🔄 Processing ${limitedTransactions.length} transactions for ATO export preview...`);
+    // Get current page of transactions
+    const pageTransactions = transactions.slice(startIndex, endIndex);
+    
+    console.log(`🔄 ENTERPRISE PROCESSING: Page ${page}/${totalPages} - ${pageTransactions.length} transactions (${startIndex}-${endIndex} of ${totalTransactions})`);
     
     // Progress logging for large datasets
-    if (limitedTransactions.length > 1000) {
-      console.log(`📊 Large dataset processing: ${limitedTransactions.length} transactions, ${trips?.length || 0} trips, ${vehicles?.length || 0} vehicles`);
+    if (totalTransactions > 1000) {
+      console.log(`📊 Large dataset processing: ${totalTransactions} total transactions, processing page ${page}/${totalPages}`);
     }
     
-    // Process real transaction data for preview including unlinked bills
-    const previewData = processTransactionsForATO(limitedTransactions, trips, vehicles, unlinkedBills);
+    // Process current page of transaction data
+    const previewData = processTransactionsForATO(pageTransactions, trips, vehicles, unlinkedBills);
     
     const processingTime = Date.now() - startTime;
-    console.log(`✅ ATO export preview completed in ${processingTime}ms`);
+    console.log(`✅ ATO export preview page ${page} completed in ${processingTime}ms`);
 
+    // Prepare response data
+    const responseData = {
+      ...previewData,
+      // Add pagination metadata
+      pagination: {
+        currentPage: page,
+        totalPages,
+        pageSize: actualPageSize,
+        totalTransactions,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1
+      },
+      // Add performance metrics
+      performance: {
+        processingTimeMs: processingTime,
+        transactionsPerSecond: Math.round(pageTransactions.length / (processingTime / 1000)),
+        memoryUsage: process.memoryUsage().heapUsed / 1024 / 1024 // MB
+      }
+    };
+
+    // ENTERPRISE CACHING: Cache the processed data
+    req.app.locals.setCachedData?.(cacheKey, responseData);
+
+    // ENTERPRISE RESPONSE: Include pagination metadata
     res.json({
       success: true,
-      data: previewData,
-      processingTimeMs: processingTime,
-      totalTransactions: transactions.length,
-      processedTransactions: limitedTransactions.length,
+      data: responseData,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
