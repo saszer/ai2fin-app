@@ -95,7 +95,7 @@ app.use((req, res, next) => {
 });
 
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' })); // Limit request body size
+app.use(express.json({ limit: '50mb' })); // Increased limit for large datasets (2K+ transactions)
 
 // 📝 HTTP Request Logging Middleware
 app.use((req, res, next) => {
@@ -255,13 +255,19 @@ app.get('/api/analytics/insights', async (req, res) => {
 if (require.main === module) {
   // Use 0.0.0.0 for production to allow external connections, but rely on CORS for security
   const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1';
-  app.listen(Number(PORT), host, () => {
+  const server = app.listen(Number(PORT), host, () => {
     console.log(`📊 Analytics Service running on port ${PORT} (${host})`);
     console.log(`📈 Advanced Reporting: ${process.env.ENABLE_ADVANCED_REPORTING === 'true' ? 'Enabled' : 'Disabled'}`);
     console.log(`📤 Exports: ${process.env.ENABLE_EXPORTS === 'true' ? 'Enabled' : 'Disabled'}`);
     console.log(`🏢 ATO Exports: Enabled`); // embracingearth.space - ATO myDeductions export support
     console.log(`🛡️ CORS Security: ${process.env.NODE_ENV === 'production' ? 'Production Mode' : 'Development Mode'}`);
+    console.log(`⚡ Performance: Optimized for large datasets (2K+ transactions)`);
   });
+
+  // Set longer timeouts for large dataset processing
+  server.timeout = 120000; // 2 minutes for large exports
+  server.keepAliveTimeout = 65000; // 65 seconds
+  server.headersTimeout = 66000; // 66 seconds
 }
 
 export default app; 
