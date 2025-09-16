@@ -99,6 +99,8 @@ app.use(express.json({ limit: '50mb' })); // Increased limit for large datasets 
 
 // ENTERPRISE RATE LIMITING: Optimized for large datasets
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
+
 const analyticsRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 1000, // Increased to 1000 requests per 15 minutes for large datasets
@@ -115,9 +117,9 @@ const analyticsRateLimit = rateLimit({
   keyGenerator: (req) => {
     // Different limits for different endpoint types
     if (req.path.includes('/export/')) {
-      return `export:${req.ip}`; // Separate bucket for exports
+      return `export:${ipKeyGenerator(req)}`; // Separate bucket for exports
     }
-    return req.ip; // Default bucket for other requests
+    return ipKeyGenerator(req); // Default bucket for other requests
   }
 });
 
@@ -423,7 +425,7 @@ if (require.main === module) {
   const server = app.listen(Number(PORT), host, () => {
     console.log(`📊 Analytics Service running on port ${PORT} (${host})`);
     console.log(`📈 Advanced Reporting: ${process.env.ENABLE_ADVANCED_REPORTING === 'true' ? 'Enabled' : 'Disabled'}`);
-    console.log(`📤 Exports: ${process.env.ENABLE_EXPORTS === 'true' ? 'Enabled' : 'Disabled'}`);
+    console.log(`📤 Exports: Enabled`); // CRITICAL: Always enabled for ATO functionality
     console.log(`🏢 ATO Exports: Enabled`); // embracingearth.space - ATO myDeductions export support
     console.log(`🛡️ CORS Security: ${process.env.NODE_ENV === 'production' ? 'Production Mode' : 'Development Mode'}`);
     console.log(`⚡ Performance: Optimized for large datasets (2K+ transactions)`);
