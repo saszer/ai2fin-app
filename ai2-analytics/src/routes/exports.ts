@@ -382,6 +382,20 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
 router.post('/api/analytics/export/preview', async (req, res) => {
   const startTime = Date.now();
   
+  // TIMEOUT PROTECTION: Set a maximum processing time
+  const timeoutMs = 30000; // 30 seconds max
+  const timeoutId = setTimeout(() => {
+    if (!res.headersSent) {
+      console.error(`⏰ Export preview timeout after ${timeoutMs}ms`);
+      res.status(408).json({
+        success: false,
+        error: 'Request timeout - dataset too large for processing',
+        timeoutMs,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, timeoutMs);
+  
   try {
     const { startDate, endDate, transactions, trips, vehicles, unlinkedBills, page = 1, pageSize = 1000 } = req.body;
     
@@ -424,8 +438,45 @@ router.post('/api/analytics/export/preview', async (req, res) => {
       console.log(`📊 Large dataset processing: ${totalTransactions} total transactions, processing page ${page}/${totalPages}`);
     }
     
-    // Process current page of transaction data
-    const previewData = processTransactionsForATO(pageTransactions, trips, vehicles, unlinkedBills);
+    // MEMORY MONITORING: Check memory before processing
+    const memBefore = process.memoryUsage();
+    console.log(`🧠 Memory before processing: ${Math.round(memBefore.heapUsed / 1024 / 1024)}MB`);
+    
+    // Process current page of transaction data (STREAMING: Only process current page)
+    let previewData;
+    try {
+      previewData = processTransactionsForATO(pageTransactions, trips, vehicles, unlinkedBills);
+      
+      // Add streaming metadata for large datasets
+      if (totalTransactions > 1000) {
+        previewData.streaming = {
+          isStreaming: true,
+          currentPage: page,
+          totalPages,
+          processedTransactions: pageTransactions.length,
+          totalTransactions,
+          progressPercentage: Math.round((page / totalPages) * 100)
+        };
+      }
+    } catch (processingError) {
+      console.error(`❌ Processing error for page ${page}:`, processingError);
+      throw new Error(`Failed to process transactions for page ${page}: ${processingError.message}`);
+    }
+    
+    // MEMORY MONITORING: Check memory after processing
+    const memAfter = process.memoryUsage();
+    const memoryIncrease = Math.round((memAfter.heapUsed - memBefore.heapUsed) / 1024 / 1024);
+    console.log(`🧠 Memory after processing: ${Math.round(memAfter.heapUsed / 1024 / 1024)}MB (+${memoryIncrease}MB)`);
+    
+    // MEMORY SAFETY: Force garbage collection if memory usage is high
+    if (memAfter.heapUsed > 500 * 1024 * 1024) { // 500MB threshold
+      console.log(`🧹 High memory usage detected, forcing garbage collection...`);
+      if (global.gc) {
+        global.gc();
+        const memAfterGC = process.memoryUsage();
+        console.log(`🧹 Memory after GC: ${Math.round(memAfterGC.heapUsed / 1024 / 1024)}MB`);
+      }
+    }
     
     const processingTime = Date.now() - startTime;
     console.log(`✅ ATO export preview page ${page} completed in ${processingTime}ms`);
@@ -453,6 +504,9 @@ router.post('/api/analytics/export/preview', async (req, res) => {
     // ENTERPRISE CACHING: Cache the processed data
     req.app.locals.setCachedData?.(cacheKey, responseData);
 
+    // Clear timeout since request completed successfully
+    clearTimeout(timeoutId);
+    
     // ENTERPRISE RESPONSE: Include pagination metadata
     res.json({
       success: true,
@@ -460,6 +514,8 @@ router.post('/api/analytics/export/preview', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
+    // Clear timeout on error too
+    clearTimeout(timeoutId);
     const processingTime = Date.now() - startTime;
     console.error(`❌ Export preview error after ${processingTime}ms:`, error);
     res.status(500).json({
