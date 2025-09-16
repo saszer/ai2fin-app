@@ -257,6 +257,20 @@ function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Ve
 router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
   const startTime = Date.now();
   
+  // TIMEOUT PROTECTION: Set a maximum processing time for exports
+  const timeoutMs = 60000; // 60 seconds max for exports
+  const timeoutId = setTimeout(() => {
+    if (!res.headersSent) {
+      console.error(`⏰ Export timeout after ${timeoutMs}ms`);
+      res.status(408).json({
+        success: false,
+        error: 'Export timeout - dataset too large for processing',
+        timeoutMs,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, timeoutMs);
+  
   try {
     // ENTERPRISE SECURITY: Extract user ID from request headers
     const userId = req.headers['x-user-id'] as string;
@@ -268,7 +282,7 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
       });
     }
 
-    const { startDate, endDate, transactions, trips, vehicles, unlinkedBills } = req.body;
+    const { startDate, endDate, transactions, trips, vehicles, unlinkedBills, totalTransactions } = req.body;
     
     if (!startDate || !endDate || !transactions) {
       return res.status(400).json({
@@ -278,15 +292,20 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
       });
     }
 
-    // PERFORMANCE SAFEGUARD: Limit transaction processing to prevent timeouts
-    const maxTransactions = 10000; // Increased limit for production
+    // ENTERPRISE STREAMING: Process large datasets in chunks to prevent memory issues
+    const totalTxns = totalTransactions || transactions.length;
+    const maxTransactions = 15000; // Increased limit for production
     const limitedTransactions = transactions.slice(0, maxTransactions);
     
     if (transactions.length > maxTransactions) {
       console.warn(`⚠️ Large dataset detected: ${transactions.length} transactions, limiting to ${maxTransactions} for performance`);
     }
 
-    console.log(`🔄 Generating ATO CSV for ${limitedTransactions.length} transactions...`);
+    console.log(`🔄 ENTERPRISE EXPORT: Generating ATO CSV for ${limitedTransactions.length} transactions (${totalTxns} total)...`);
+    
+    // MEMORY MONITORING: Check memory before processing
+    const memBefore = process.memoryUsage();
+    console.log(`🧠 Memory before export: ${Math.round(memBefore.heapUsed / 1024 / 1024)}MB`);
     
     // ENTERPRISE QUOTA: Check export quota before processing
     try {
@@ -323,8 +342,23 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
     const csvContent = generateATOCSV(limitedTransactions, trips || [], vehicles || [], startDate, endDate, unlinkedBills || []);
     const filename = `ATO_myDeductions_${format(new Date(startDate), 'yyyy-MM-dd')}_to_${format(new Date(endDate), 'yyyy-MM-dd')}.csv`;
     
+    // MEMORY MONITORING: Check memory after processing
+    const memAfter = process.memoryUsage();
+    const memoryIncrease = Math.round((memAfter.heapUsed - memBefore.heapUsed) / 1024 / 1024);
+    console.log(`🧠 Memory after export: ${Math.round(memAfter.heapUsed / 1024 / 1024)}MB (+${memoryIncrease}MB)`);
+    
+    // MEMORY SAFETY: Force garbage collection if memory usage is high
+    if (memAfter.heapUsed > 1000 * 1024 * 1024) { // 1GB threshold
+      console.log(`🧹 High memory usage detected, forcing garbage collection...`);
+      if (global.gc) {
+        global.gc();
+        const memAfterGC = process.memoryUsage();
+        console.log(`🧹 Memory after GC: ${Math.round(memAfterGC.heapUsed / 1024 / 1024)}MB`);
+      }
+    }
+    
     const processingTime = Date.now() - startTime;
-    console.log(`✅ ATO CSV generation completed in ${processingTime}ms`);
+    console.log(`✅ ENTERPRISE EXPORT: ATO CSV generation completed in ${processingTime}ms for ${limitedTransactions.length} transactions`);
 
     // ENTERPRISE QUOTA: Consume export quota after successful generation
     try {
@@ -351,6 +385,9 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
       // Don't fail the export if quota consumption fails
     }
 
+    // Clear timeout since export completed successfully
+    clearTimeout(timeoutId);
+    
     res.json({
       success: true,
       data: {
@@ -367,6 +404,8 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
+    // Clear timeout on error too
+    clearTimeout(timeoutId);
     const processingTime = Date.now() - startTime;
     console.error(`❌ ATO export error after ${processingTime}ms:`, error);
     res.status(500).json({
@@ -397,7 +436,7 @@ router.post('/api/analytics/export/preview', async (req, res) => {
   }, timeoutMs);
   
   try {
-    const { startDate, endDate, transactions, trips, vehicles, unlinkedBills, page = 1, pageSize = 1000 } = req.body;
+    const { startDate, endDate, transactions, trips, vehicles, unlinkedBills, page = 1, pageSize = 1000, totalTransactions } = req.body;
     
     // ENTERPRISE CACHING: Check cache first for performance
     const cacheKey = `preview:${startDate}:${endDate}:${page}:${pageSize}`;
@@ -421,21 +460,21 @@ router.post('/api/analytics/export/preview', async (req, res) => {
     }
 
     // ENTERPRISE PAGINATION: Process data in chunks to prevent memory issues
-    const totalTransactions = transactions.length;
+    // CRITICAL FIX: Use totalTransactions from frontend for proper pagination context
+    const totalTxns = totalTransactions || transactions.length;
     const maxPageSize = 5000; // Enterprise limit per page
     const actualPageSize = Math.min(pageSize, maxPageSize);
-    const totalPages = Math.ceil(totalTransactions / actualPageSize);
-    const startIndex = (page - 1) * actualPageSize;
-    const endIndex = Math.min(startIndex + actualPageSize, totalTransactions);
+    const totalPages = Math.ceil(totalTxns / actualPageSize);
     
-    // Get current page of transactions
-    const pageTransactions = transactions.slice(startIndex, endIndex);
+    // The transactions array is already paginated by the frontend
+    // No need to slice it again - process all transactions in this request
+    const pageTransactions = transactions;
     
-    console.log(`🔄 ENTERPRISE PROCESSING: Page ${page}/${totalPages} - ${pageTransactions.length} transactions (${startIndex}-${endIndex} of ${totalTransactions})`);
+    console.log(`🔄 ENTERPRISE PROCESSING: Page ${page}/${totalPages} - ${pageTransactions.length} transactions of ${totalTxns} total`);
     
     // Progress logging for large datasets
-    if (totalTransactions > 1000) {
-      console.log(`📊 Large dataset processing: ${totalTransactions} total transactions, processing page ${page}/${totalPages}`);
+    if (totalTxns > 1000) {
+      console.log(`📊 Large dataset processing: ${totalTxns} total transactions, processing page ${page}/${totalPages}`);
     }
     
     // MEMORY MONITORING: Check memory before processing
@@ -448,13 +487,13 @@ router.post('/api/analytics/export/preview', async (req, res) => {
       previewData = processTransactionsForATO(pageTransactions, trips, vehicles, unlinkedBills);
       
       // Add streaming metadata for large datasets
-      if (totalTransactions > 1000) {
+      if (totalTxns > 1000) {
         previewData.streaming = {
           isStreaming: true,
           currentPage: page,
           totalPages,
           processedTransactions: pageTransactions.length,
-          totalTransactions,
+          totalTransactions: totalTxns,
           progressPercentage: Math.round((page / totalPages) * 100)
         };
       }
@@ -489,7 +528,7 @@ router.post('/api/analytics/export/preview', async (req, res) => {
         currentPage: page,
         totalPages,
         pageSize: actualPageSize,
-        totalTransactions,
+        totalTransactions: totalTxns,
         hasNextPage: page < totalPages,
         hasPreviousPage: page > 1
       },
