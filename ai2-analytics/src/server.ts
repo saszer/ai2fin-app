@@ -392,6 +392,43 @@ app.get('/api/analytics/status', (req, res) => {
   });
 });
 
+// CRITICAL FIX: Add missing /api/analytics/health endpoint for production service discovery
+app.get('/api/analytics/health', (req, res) => {
+  const memoryUsage = process.memoryUsage();
+  const uptime = process.uptime();
+  
+  res.json({
+    status: 'healthy',
+    service: 'analytics',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    features: {
+      advancedReporting: process.env.ENABLE_ADVANCED_REPORTING === 'true',
+      exports: true, // CRITICAL FIX: Always enable exports for ATO functionality
+      insights: process.env.ENABLE_INSIGHTS === 'true',
+      atoExports: true // embracingearth.space - ATO myDeductions export support
+    },
+    // ENTERPRISE METRICS
+    performance: {
+      uptime: Math.floor(uptime),
+      memory: {
+        used: Math.round(memoryUsage.heapUsed / 1024 / 1024), // MB
+        total: Math.round(memoryUsage.heapTotal / 1024 / 1024), // MB
+        external: Math.round(memoryUsage.external / 1024 / 1024) // MB
+      },
+      cache: enterpriseCache.getStats()
+    },
+    // ENTERPRISE CAPABILITIES
+    capabilities: {
+      pagination: true,
+      caching: true,
+      rateLimiting: true,
+      largeDatasets: true,
+      streaming: true
+    }
+  });
+});
+
 // Make cache functions available to routes
 app.locals.getCachedData = getCachedData;
 app.locals.setCachedData = setCachedData;
