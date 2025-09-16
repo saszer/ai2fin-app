@@ -285,23 +285,7 @@ const getCacheKey = (req: any) => {
 const getCachedData = (key: string) => enterpriseCache.get(key);
 const setCachedData = (key: string, data: any) => enterpriseCache.set(key, data);
 
-// ENTERPRISE MEMORY CLEANUP: Periodic cache cleanup
-setInterval(() => {
-  const now = Date.now();
-  const expiredKeys = [];
-  
-  for (const [key, value] of cache.entries()) {
-    if (now - value.timestamp > CACHE_TTL) {
-      expiredKeys.push(key);
-    }
-  }
-  
-  expiredKeys.forEach(key => cache.delete(key));
-  
-  if (expiredKeys.length > 0) {
-    console.log(`🧹 Cache cleanup: Removed ${expiredKeys.length} expired entries`);
-  }
-}, 60000); // Clean up every minute
+// ENTERPRISE MEMORY CLEANUP: Handled by EnterpriseCache class automatically
 
 // 📝 HTTP Request Logging Middleware
 app.use((req, res, next) => {
