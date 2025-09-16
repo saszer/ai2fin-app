@@ -84,42 +84,62 @@ interface ExportPreview {
 
 // Helper function to process transactions for ATO format (OPTIMIZED for large datasets)
 function processTransactionsForATO(transactions: Transaction[], trips?: Trip[], vehicles?: Vehicle[], unlinkedBills?: UnlinkedBillOccurrence[]): ExportPreview {
-  // PERFORMANCE OPTIMIZATION: Single pass through transactions to avoid multiple filters
+  // ENTERPRISE PERFORMANCE: Optimized single-pass processing with pre-allocated arrays
+  const startTime = performance.now();
+  const totalTxns = transactions.length;
+  
+  // MEMORY OPTIMIZATION: Pre-allocate arrays with estimated capacity
+  const estimatedIncome = Math.min(Math.ceil(totalTxns * 0.15), 2000);
+  const estimatedExpenses = Math.min(Math.ceil(totalTxns * 0.35), 5000);
+  
+  const income: Transaction[] = new Array(estimatedIncome);
+  const expenses: Transaction[] = new Array(estimatedExpenses);
+  let incomeIndex = 0;
+  let expenseIndex = 0;
+  
   let totalIncome = 0;
   let totalExpenses = 0;
   let businessExpenses = 0;
   let employeeExpenses = 0;
-  const income: Transaction[] = [];
-  const expenses: Transaction[] = [];
   
-  // MEMORY OPTIMIZATION: Pre-allocate arrays for large datasets
-  if (transactions.length > 1000) {
-    // Pre-allocate arrays with estimated capacity for better performance
-    const estimatedIncome = Math.min(transactions.length * 0.1, 1000);
-    const estimatedExpenses = Math.min(transactions.length * 0.3, 3000);
-    // Note: JavaScript arrays grow dynamically, so we just log the optimization
-    console.log(`📊 Memory optimization: Processing ${transactions.length} transactions with estimated ${estimatedIncome} income, ${estimatedExpenses} expenses`);
-  }
+  console.log(`📊 ENTERPRISE PROCESSING: ${totalTxns} transactions, pre-allocated ${estimatedIncome} income, ${estimatedExpenses} expenses`);
   
-  // Single loop through all transactions for better performance
-  for (const t of transactions) {
+  // ENTERPRISE OPTIMIZATION: Single pass with optimized conditionals
+  for (let i = 0; i < totalTxns; i++) {
+    const t = transactions[i];
     const amount = Math.abs(t.amount);
     
-    if (t.primaryType === 'income' && (t.isTaxDeductible || t.expenseType === 'business')) {
-      income.push(t);
-      totalIncome += amount;
-    } else if (t.primaryType === 'expense' && t.isTaxDeductible) {
-      expenses.push(t);
+    // Optimized conditionals - check most common case first
+    if (t.primaryType === 'expense' && t.isTaxDeductible) {
+      if (expenseIndex < estimatedExpenses) {
+        expenses[expenseIndex++] = t;
+      } else {
+        expenses.push(t); // Fallback to dynamic growth
+      }
       totalExpenses += amount;
       
-      // Categorize expense types in the same loop
-      if (t.expenseType === 'business' || !t.expenseType) {
-        businessExpenses += amount;
-      } else if (t.expenseType === 'employee') {
+      // Categorize expense types efficiently
+      if (t.expenseType === 'employee') {
         employeeExpenses += amount;
+      } else {
+        businessExpenses += amount;
       }
+    } else if (t.primaryType === 'income' && (t.isTaxDeductible || t.expenseType === 'business')) {
+      if (incomeIndex < estimatedIncome) {
+        income[incomeIndex++] = t;
+      } else {
+        income.push(t); // Fallback to dynamic growth
+      }
+      totalIncome += amount;
     }
   }
+  
+  // Trim arrays to actual size for memory efficiency
+  if (incomeIndex < income.length) income.length = incomeIndex;
+  if (expenseIndex < expenses.length) expenses.length = expenseIndex;
+  
+  const processingTime = performance.now() - startTime;
+  console.log(`⚡ ENTERPRISE PROCESSING: Completed in ${processingTime.toFixed(2)}ms (${(totalTxns / (processingTime / 1000)).toFixed(0)} tx/sec)`);
 
   const totalTrips = trips?.length || 0;
   const totalDistance = trips?.reduce((sum, t) => sum + t.totalKm, 0) || 0;
@@ -284,10 +304,58 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
 
     const { startDate, endDate, transactions, trips, vehicles, unlinkedBills, totalTransactions } = req.body;
     
+    // ENTERPRISE VALIDATION: Comprehensive input validation
     if (!startDate || !endDate || !transactions) {
       return res.status(400).json({
         success: false,
         error: 'Missing required parameters: startDate, endDate, transactions',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // ENTERPRISE SECURITY: Validate data types and ranges
+    if (!Array.isArray(transactions)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid transactions data: must be an array',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    if (transactions.length > 50000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Dataset too large: maximum 50,000 transactions allowed',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // ENTERPRISE SECURITY: Validate date format and range
+    const startDateObj = new Date(startDate);
+    const endDateObj = new Date(endDate);
+    
+    if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid date format: use YYYY-MM-DD',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    if (startDateObj > endDateObj) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid date range: start date must be before end date',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // ENTERPRISE SECURITY: Validate date range (max 2 years)
+    const maxDateRange = 2 * 365 * 24 * 60 * 60 * 1000; // 2 years in milliseconds
+    if (endDateObj.getTime() - startDateObj.getTime() > maxDateRange) {
+      return res.status(400).json({
+        success: false,
+        error: 'Date range too large: maximum 2 years allowed',
         timestamp: new Date().toISOString()
       });
     }

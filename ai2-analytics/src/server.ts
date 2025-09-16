@@ -179,44 +179,111 @@ app.use('/api/analytics/export', exportRateLimit);
 // Apply concurrent limiting to export endpoints
 app.use('/api/analytics/export', concurrentLimitMiddleware);
 
-// ENTERPRISE CACHING: In-memory cache for processed data with memory leak prevention
-const cache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const MAX_CACHE_SIZE = 50; // Reduced to prevent memory issues
+// ENTERPRISE CACHING: Advanced memory management with LRU and TTL
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+  accessCount: number;
+  lastAccessed: number;
+}
 
+class EnterpriseCache {
+  private cache = new Map<string, CacheEntry>();
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  private readonly MAX_CACHE_SIZE = 100; // Increased for better performance
+  private readonly CLEANUP_INTERVAL = 2 * 60 * 1000; // 2 minutes
+  private cleanupTimer: NodeJS.Timeout;
+
+  constructor() {
+    // Periodic cleanup to prevent memory leaks
+    this.cleanupTimer = setInterval(() => {
+      this.cleanup();
+    }, this.CLEANUP_INTERVAL);
+  }
+
+  private cleanup(): void {
+    const now = Date.now();
+    const entries = Array.from(this.cache.entries());
+    
+    // Remove expired entries
+    entries.forEach(([key, entry]) => {
+      if (now - entry.timestamp > this.CACHE_TTL) {
+        this.cache.delete(key);
+      }
+    });
+
+    // If still over limit, remove least recently used entries
+    if (this.cache.size > this.MAX_CACHE_SIZE) {
+      const sortedEntries = entries
+        .filter(([key]) => this.cache.has(key))
+        .sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+      
+      const toRemove = sortedEntries.slice(0, Math.floor(this.MAX_CACHE_SIZE / 2));
+      toRemove.forEach(([key]) => this.cache.delete(key));
+    }
+
+    console.log(`🧹 Cache cleanup: ${this.cache.size} entries remaining`);
+  }
+
+  get(key: string): any | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+
+    const now = Date.now();
+    if (now - entry.timestamp > this.CACHE_TTL) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    // Update access tracking
+    entry.accessCount++;
+    entry.lastAccessed = now;
+    return entry.data;
+  }
+
+  set(key: string, data: any): void {
+    // Cleanup before adding new entry
+    if (this.cache.size >= this.MAX_CACHE_SIZE) {
+      this.cleanup();
+    }
+
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+      accessCount: 1,
+      lastAccessed: Date.now()
+    });
+  }
+
+  getStats() {
+    const entries = Array.from(this.cache.values());
+    return {
+      size: this.cache.size,
+      maxSize: this.MAX_CACHE_SIZE,
+      avgAccessCount: entries.reduce((sum, e) => sum + e.accessCount, 0) / entries.length || 0,
+      oldestEntry: Math.min(...entries.map(e => e.timestamp)),
+      newestEntry: Math.max(...entries.map(e => e.timestamp))
+    };
+  }
+
+  destroy(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+    }
+    this.cache.clear();
+  }
+}
+
+const enterpriseCache = new EnterpriseCache();
+
+// Legacy compatibility functions
 const getCacheKey = (req: any) => {
   const { startDate, endDate, page, pageSize } = req.body;
   return `preview:${startDate}:${endDate}:${page}:${pageSize}`;
 };
 
-const getCachedData = (key: string) => {
-  const cached = cache.get(key);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.data;
-  }
-  cache.delete(key);
-  return null;
-};
-
-const setCachedData = (key: string, data: any) => {
-  // ENTERPRISE MEMORY MANAGEMENT: Prevent memory leaks
-  if (cache.size >= MAX_CACHE_SIZE) {
-    // Remove oldest entries (LRU-style cleanup)
-    const entries = Array.from(cache.entries());
-    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-    
-    // Remove oldest 25% of entries
-    const toRemove = Math.floor(MAX_CACHE_SIZE * 0.25);
-    for (let i = 0; i < toRemove; i++) {
-      cache.delete(entries[i][0]);
-    }
-  }
-  
-  cache.set(key, {
-    data,
-    timestamp: Date.now()
-  });
-};
+const getCachedData = (key: string) => enterpriseCache.get(key);
+const setCachedData = (key: string, data: any) => enterpriseCache.set(key, data);
 
 // ENTERPRISE MEMORY CLEANUP: Periodic cache cleanup
 setInterval(() => {
@@ -276,10 +343,7 @@ app.get('/health', (req, res) => {
         total: Math.round(memoryUsage.heapTotal / 1024 / 1024), // MB
         external: Math.round(memoryUsage.external / 1024 / 1024) // MB
       },
-      cache: {
-        size: cache.size,
-        maxSize: 100
-      }
+      cache: enterpriseCache.getStats()
     },
     // ENTERPRISE CAPABILITIES
     capabilities: {
