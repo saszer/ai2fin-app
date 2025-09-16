@@ -377,7 +377,9 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
     
     // ENTERPRISE QUOTA: Check export quota before processing
     try {
-      const quotaResponse = await fetch(`${process.env.CORE_APP_URL || 'http://localhost:3001'}/api/quota/check`, {
+      // CRITICAL FIX: Use environment-based URL for production compatibility
+      const coreAppUrl = process.env.CORE_APP_URL || process.env.ANALYTICS_CORE_URL || 'http://localhost:3001';
+      const quotaResponse = await fetch(`${coreAppUrl}/api/quota/check`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -430,7 +432,9 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
 
     // ENTERPRISE QUOTA: Consume export quota after successful generation
     try {
-      await fetch(`${process.env.CORE_APP_URL || 'http://localhost:3001'}/api/quota/consume`, {
+      // CRITICAL FIX: Use environment-based URL for production compatibility
+      const coreAppUrl = process.env.CORE_APP_URL || process.env.ANALYTICS_CORE_URL || 'http://localhost:3001';
+      await fetch(`${coreAppUrl}/api/quota/consume`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
