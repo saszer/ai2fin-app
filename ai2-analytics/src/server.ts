@@ -103,7 +103,7 @@ const { ipKeyGenerator } = require('express-rate-limit');
 
 const analyticsRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // Increased to 1000 requests per 15 minutes for large datasets
+  max: 1000, // 1000 requests per 15 minutes for large datasets
   message: {
     success: false,
     error: 'Too many requests from this IP, please try again later.',
@@ -137,9 +137,45 @@ const exportRateLimit = rateLimit({
   skip: (req) => req.path === '/health'
 });
 
+// 🚨 EMERGENCY REQUEST DEDUPLICATION: Prevent duplicate calls
+const requestCache = new Map();
+const REQUEST_CACHE_TTL = 30000; // 30 seconds cache for duplicate requests
+
 // ENTERPRISE CONCURRENT REQUEST LIMITING: Prevent server overload
 const activeRequests = new Map();
-const MAX_CONCURRENT_EXPORTS = 5; // Maximum concurrent export requests
+const MAX_CONCURRENT_EXPORTS = 2; // DRASTICALLY REDUCED: 2 concurrent exports (was 5)
+
+// 🚨 EMERGENCY DEDUPLICATION MIDDLEWARE: Prevent duplicate requests
+const deduplicationMiddleware = (req: any, res: any, next: any) => {
+  const userId = req.headers['x-user-id'] || req.ip;
+  const requestKey = `${req.method}-${req.path}-${userId}-${JSON.stringify(req.body)}`;
+  const now = Date.now();
+  
+  // Check if this exact request was made recently
+  if (requestCache.has(requestKey)) {
+    const cached = requestCache.get(requestKey);
+    if (now - cached.timestamp < REQUEST_CACHE_TTL) {
+      console.log('🚨 DUPLICATE REQUEST BLOCKED:', requestKey);
+      return res.status(429).json({
+        success: false,
+        error: 'Duplicate request detected - please wait before retrying',
+        retryAfter: Math.ceil((REQUEST_CACHE_TTL - (now - cached.timestamp)) / 1000)
+      });
+    }
+  }
+  
+  // Cache this request
+  requestCache.set(requestKey, { timestamp: now });
+  
+  // Clean old cache entries
+  for (const [key, value] of requestCache.entries()) {
+    if (now - value.timestamp > REQUEST_CACHE_TTL) {
+      requestCache.delete(key);
+    }
+  }
+  
+  next();
+};
 
 const concurrentLimitMiddleware = (req: any, res: any, next: any) => {
   const userId = req.headers['x-user-id'] || req.ip;
