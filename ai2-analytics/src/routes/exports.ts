@@ -504,6 +504,16 @@ router.post('/api/analytics/export/preview', async (req, res) => {
   }, timeoutMs);
   
   try {
+    // ENTERPRISE SECURITY: Validate user authentication
+    const userId = req.headers['x-user-id'] as string;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'User authentication required for preview',
+        timestamp: new Date().toISOString()
+      });
+    }
+
     const { startDate, endDate, transactions, trips, vehicles, unlinkedBills, page = 1, pageSize = 1000, totalTransactions } = req.body;
     
     // ENTERPRISE CACHING: Check cache first for performance
