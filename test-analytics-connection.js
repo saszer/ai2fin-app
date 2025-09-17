@@ -103,3 +103,4 @@ async function testAnalyticsConnection() {
 
 // Run the test
 testAnalyticsConnection();
+

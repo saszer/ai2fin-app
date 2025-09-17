@@ -523,3 +523,4 @@ module.exports = { ATOExportTester, TestLogger, CONFIG };
 if (require.main === module) {
   runTests();
 }
+
