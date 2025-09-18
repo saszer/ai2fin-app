@@ -51,6 +51,20 @@ const corsOptions = {
 if (ORIGIN_LOCK_ENABLED && ORIGIN_SHARED_SECRET) {
   app.use((req, res, next) => {
     if (process.env.NODE_ENV === 'development') return next();
+    
+    // Allow internal Fly.io calls and health checks to bypass origin lock
+    const isInternalCall = req.ip === '127.0.0.1' || req.ip === '::1' || req.ip === '::ffff:127.0.0.1';
+    const isHealthCheck = req.path === '/health' || req.path === '/api/analytics/health';
+    
+    if (isInternalCall || isHealthCheck) {
+      console.log('🔓 Analytics: Internal call bypassing origin lock', {
+        path: req.originalUrl,
+        remoteAddress: req.ip,
+        reason: isInternalCall ? 'internal_call' : 'health_check'
+      });
+      return next();
+    }
+    
     const received = String(req.headers[ORIGIN_HEADER_NAME] || '');
     if (received !== ORIGIN_SHARED_SECRET) {
       console.warn('🔒 Analytics origin lock rejection', {
@@ -63,7 +77,7 @@ if (ORIGIN_LOCK_ENABLED && ORIGIN_SHARED_SECRET) {
     }
     return next();
   });
-  console.log('🔒 Analytics: Cloudflare Origin Lock enabled', { headerName: ORIGIN_HEADER_NAME });
+  console.log('🔒 Analytics: Cloudflare Origin Lock enabled with internal bypass', { headerName: ORIGIN_HEADER_NAME });
 } else {
   console.log('🔒 Analytics: Cloudflare Origin Lock disabled', { reason: ORIGIN_LOCK_ENABLED ? 'missing_shared_secret' : 'enforcement_flag_off' });
 }

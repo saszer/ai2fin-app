@@ -524,3 +524,4 @@ if (require.main === module) {
   runTests();
 }
 
+
