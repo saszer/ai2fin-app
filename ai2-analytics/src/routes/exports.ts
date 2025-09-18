@@ -350,8 +350,8 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
       });
     }
     
-    // ENTERPRISE SECURITY: Validate date range (max 2 years)
-    const maxDateRange = 2 * 365 * 24 * 60 * 60 * 1000; // 2 years in milliseconds
+    // ENTERPRISE SECURITY: Validate date range (max 5 years for large datasets)
+    const maxDateRange = 5 * 365 * 24 * 60 * 60 * 1000; // 5 years in milliseconds
     if (endDateObj.getTime() - startDateObj.getTime() > maxDateRange) {
       return res.status(400).json({
         success: false,
@@ -362,7 +362,7 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
 
     // ENTERPRISE STREAMING: Process large datasets in chunks to prevent memory issues
     const totalTxns = totalTransactions || transactions.length;
-    const maxTransactions = 15000; // Increased limit for production
+    const maxTransactions = 100000; // ENTERPRISE: Increased limit to 100,000 for large datasets
     const limitedTransactions = transactions.slice(0, maxTransactions);
     
     if (transactions.length > maxTransactions) {
@@ -544,7 +544,7 @@ router.post('/api/analytics/export/preview', async (req, res) => {
     // ENTERPRISE PAGINATION: Process data in chunks to prevent memory issues
     // CRITICAL FIX: Use totalTransactions from frontend for proper pagination context
     const totalTxns = totalTransactions || transactions.length;
-    const maxPageSize = 5000; // Enterprise limit per page
+    const maxPageSize = 20000; // ENTERPRISE: Increased limit to 20,000 per page for large datasets
     const actualPageSize = Math.min(pageSize, maxPageSize);
     const totalPages = Math.ceil(totalTxns / actualPageSize);
     
