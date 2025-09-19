@@ -3,6 +3,120 @@ import { format } from 'date-fns';
 
 const router = express.Router();
 
+// Helper function to enhance transactions with tax categories from unified intelligence cache
+// ENTERPRISE OPTIMIZATION: Single batch query to get all tax categories at once
+async function enhanceTransactionsWithTaxCategories(
+  prisma: any,
+  userId: string,
+  transactions: Transaction[]
+): Promise<Map<string, string>> {
+  const taxCategoryMap = new Map<string, string>();
+  
+  try {
+    if (!transactions || transactions.length === 0) {
+      return taxCategoryMap;
+    }
+
+    // Generate transaction hashes for all transactions using the same logic as UnifiedIntelligenceService
+    const crypto = require('crypto');
+    const transactionHashes = transactions.map(tx => {
+      // Use TransactionNormalizationService logic for consistent hash generation
+      const normalizedDescription = tx.description
+        .toLowerCase()
+        .trim()
+        .replace(/\d+/g, '') // Remove reference numbers
+        .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '') // Remove dates
+        .replace(/\b\d{2}:\d{2}\b/g, '') // Remove times
+        .replace(/\b(transfer|payment|deposit|withdrawal)\b/g, '') // Remove common bank terms
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .trim();
+      
+      const normalizedMerchant = (tx.merchant?.trim().toLowerCase() || '').replace(/\s+/g, ' ');
+      const txString = `${normalizedDescription}|0|${normalizedMerchant}`;
+      const hash = crypto.createHash('md5').update(txString).digest('hex').substring(0, 12);
+      
+      return {
+        transactionId: tx.id,
+        hash: hash
+      };
+    });
+
+    const hashes = transactionHashes.map(th => th.hash);
+    
+    if (hashes.length === 0) {
+      return taxCategoryMap;
+    }
+
+    // ENTERPRISE OPTIMIZATION: Single batch query for all transaction hashes
+    const cacheEntries = await prisma.$queryRaw`
+      SELECT DISTINCT ON ("transactionHash") 
+        "transactionHash", 
+        "taxResult", 
+        "categoryResult",
+        "userId"
+      FROM unified_intelligence_cache 
+      WHERE "transactionHash" = ANY(${hashes})
+        AND ("userId" = ${userId} OR "userId" IS NULL)
+        AND ("expiresAt" IS NULL OR "expiresAt" > NOW())
+      ORDER BY 
+        "transactionHash",
+        CASE WHEN "userId" = ${userId} THEN 1 ELSE 2 END,
+        "createdAt" DESC
+    `;
+
+    // Create hash to transaction ID mapping
+    const hashToTransactionId = new Map<string, string>();
+    transactionHashes.forEach(th => {
+      hashToTransactionId.set(th.hash, th.transactionId);
+    });
+
+    // Process cache entries and extract tax categories
+    if (cacheEntries && Array.isArray(cacheEntries)) {
+      cacheEntries.forEach(entry => {
+        const transactionId = hashToTransactionId.get(entry.transactionHash);
+        if (!transactionId) return;
+
+        try {
+          // Try tax result first
+          if (entry.taxResult) {
+            const taxResult = JSON.parse(entry.taxResult);
+            if (taxResult && 
+                typeof taxResult === 'object' && 
+                taxResult.taxCategory && 
+                typeof taxResult.taxCategory === 'string' &&
+                taxResult.taxConfidence > 0.5) {
+              taxCategoryMap.set(transactionId, taxResult.taxCategory);
+              return;
+            }
+          }
+
+          // Fallback to category result
+          if (entry.categoryResult) {
+            const categoryResult = JSON.parse(entry.categoryResult);
+            if (categoryResult && 
+                typeof categoryResult === 'object' &&
+                categoryResult.taxCategory &&
+                typeof categoryResult.taxCategory === 'string' &&
+                categoryResult.taxConfidence > 0.5) {
+              taxCategoryMap.set(transactionId, categoryResult.taxCategory);
+              return;
+            }
+          }
+        } catch (parseError) {
+          console.warn(`⚠️ Failed to parse cache result for transaction ${transactionId}:`, parseError);
+        }
+      });
+    }
+
+    console.log(`✅ Enhanced ${taxCategoryMap.size}/${transactions.length} transactions with tax categories from unified intelligence cache`);
+    
+  } catch (error) {
+    console.error('❌ Failed to enhance transactions with tax categories:', error);
+  }
+
+  return taxCategoryMap;
+}
+
 // Interface for transaction data (matching core app structure)
 interface Transaction {
   id: string;
@@ -12,11 +126,12 @@ interface Transaction {
   primaryType: 'expense' | 'income';
   isTaxDeductible: boolean;
   businessUsePercentage?: number;
-  expenseType?: 'business' | 'employee';
+  expenseType?: 'business' | 'employee' | 'personal';
   reference?: string;
   merchant?: string;
   category?: string;
   gstAmount?: number;
+  taxCategory?: string; // Tax category from unified intelligence cache
 }
 
 // Interface for travel data
@@ -124,7 +239,7 @@ function processTransactionsForATO(transactions: Transaction[], trips?: Trip[], 
       } else {
         businessExpenses += amount;
       }
-    } else if (t.primaryType === 'income' && (t.isTaxDeductible || t.expenseType === 'business')) {
+    } else if (t.primaryType === 'income' && t.expenseType === 'business') {
       if (incomeIndex < estimatedIncome) {
         income[incomeIndex++] = t;
       } else {
@@ -188,8 +303,18 @@ function formatDateForATO(dateString: string): string {
 }
 
 // Helper function to generate ATO CSV content with travel data and unlinked bills (OPTIMIZED)
-function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Vehicle[], startDate: string, endDate: string, unlinkedBills?: UnlinkedBillOccurrence[]): string {
+async function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Vehicle[], startDate: string, endDate: string, unlinkedBills?: UnlinkedBillOccurrence[], userId?: string, prisma?: any): Promise<string> {
   const processed = processTransactionsForATO(transactions, trips, vehicles, unlinkedBills);
+  
+  // ENTERPRISE OPTIMIZATION: Batch enhance all transactions with tax categories at once
+  let taxCategoryMap = new Map<string, string>();
+  if (userId && prisma && transactions.length > 0) {
+    try {
+      taxCategoryMap = await enhanceTransactionsWithTaxCategories(prisma, userId, transactions);
+    } catch (error) {
+      console.warn('⚠️ Failed to enhance transactions with tax categories, proceeding without enhancement:', error);
+    }
+  }
   
   // PERFORMANCE FIX: Use array and join() instead of string concatenation
   const csvLines: string[] = [];
@@ -207,7 +332,17 @@ function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Ve
   for (const income of processed.income) {
     const amount = Math.abs(income.amount);
     const gst = income.gstAmount || (amount * 0.1); // Default 10% GST if not specified
-    csvLines.push(`Not uploaded,Business,Completed,${formatDateForATO(income.date)},${amount.toFixed(2)},${gst.toFixed(2)},"${income.description}","${income.reference || ''}",,,`);
+    
+    // ENHANCED: Add tax category to description if available from batch lookup
+    let enhancedDescription = income.description;
+    const taxCategory = taxCategoryMap.get(income.id);
+    if (taxCategory) {
+      enhancedDescription = `${taxCategory} = ${income.description}`;
+    } else if (income.taxCategory) {
+      enhancedDescription = `${income.taxCategory} = ${income.description}`;
+    }
+    
+    csvLines.push(`Not uploaded,Business,Completed,${formatDateForATO(income.date)},${amount.toFixed(2)},${gst.toFixed(2)},"${enhancedDescription}","${income.reference || ''}",,,`);
   }
   
   // Expenses section
@@ -224,7 +359,16 @@ function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Ve
     const subType = expense.expenseType === 'employee' ? 'Other work-related' : 'All other expenses';
     const subTypeDetail = expense.expenseType === 'employee' ? 'Other' : '';
     
-    csvLines.push(`Not uploaded,${type},Completed,${formatDateForATO(expense.date)},${amount.toFixed(2)},${gst ? gst.toFixed(2) : ''},"${expense.description}",${percentage}%,"${subType}","${subTypeDetail}",,,`);
+    // ENHANCED: Add tax category to description if available from batch lookup
+    let enhancedDescription = expense.description;
+    const taxCategory = taxCategoryMap.get(expense.id);
+    if (taxCategory) {
+      enhancedDescription = `${taxCategory} = ${expense.description}`;
+    } else if (expense.taxCategory) {
+      enhancedDescription = `${expense.taxCategory} = ${expense.description}`;
+    }
+    
+    csvLines.push(`Not uploaded,${type},Completed,${formatDateForATO(expense.date)},${amount.toFixed(2)},${gst ? gst.toFixed(2) : ''},"${enhancedDescription}",${percentage}%,"${subType}","${subTypeDetail}",,,`);
   }
 
   // Add unlinked bills as estimated expenses
@@ -409,7 +553,8 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
     }
     
     // Generate CSV content using real transaction data, travel data, and unlinked bills
-    const csvContent = generateATOCSV(limitedTransactions, trips || [], vehicles || [], startDate, endDate, unlinkedBills || []);
+    // ENHANCED: Pass userId and prisma for tax category lookup from unified intelligence cache
+    const csvContent = await generateATOCSV(limitedTransactions, trips || [], vehicles || [], startDate, endDate, unlinkedBills || [], userId, req.app.locals.prisma);
     const filename = `ATO_myDeductions_${format(new Date(startDate), 'yyyy-MM-dd')}_to_${format(new Date(endDate), 'yyyy-MM-dd')}.csv`;
     
     // MEMORY MONITORING: Check memory after processing
