@@ -413,6 +413,10 @@ async function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicl
   csvLines.push('');
   csvLines.push(`"* If applicable to expense or trip type."`);
   
+  // Add footer with branding
+  csvLines.push('');
+  csvLines.push('Powered by app.ai2fin.com');
+  
   // PERFORMANCE FIX: Single join() operation instead of multiple string concatenations
   return csvLines.join('\n');
 }
