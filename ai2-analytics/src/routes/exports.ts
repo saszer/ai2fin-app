@@ -227,7 +227,7 @@ function processTransactionsForATO(transactions: Transaction[], trips?: Trip[], 
     // Optimized conditionals - check most common case first
     if (t.primaryType === 'expense' && t.isTaxDeductible) {
       if (expenseIndex < estimatedExpenses) {
-        expenses[expenseIndex++] = t;
+        expenses[expenseIndex++] = t; // Preserve taxCategory from enhanced transaction
       } else {
         expenses.push(t); // Fallback to dynamic growth
       }
@@ -241,7 +241,7 @@ function processTransactionsForATO(transactions: Transaction[], trips?: Trip[], 
       }
     } else if (t.primaryType === 'income' && t.expenseType === 'business') {
       if (incomeIndex < estimatedIncome) {
-        income[incomeIndex++] = t;
+        income[incomeIndex++] = t; // Preserve taxCategory from enhanced transaction
       } else {
         income.push(t); // Fallback to dynamic growth
       }
@@ -309,6 +309,8 @@ async function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicl
   // ENTERPRISE OPTIMIZATION: Transactions are pre-enhanced by core app with tax categories
   // No need to access database here - core app handles the cache lookup
   console.log(`📊 Processing ${transactions.length} transactions (pre-enhanced by core app)`);
+  console.log(`🔍 Sample transaction taxCategory:`, transactions[0]?.taxCategory);
+  console.log(`🔍 Sample transaction keys:`, Object.keys(transactions[0] || {}));
   
   // PERFORMANCE FIX: Use array and join() instead of string concatenation
   const csvLines: string[] = [];
