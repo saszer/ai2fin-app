@@ -303,18 +303,12 @@ function formatDateForATO(dateString: string): string {
 }
 
 // Helper function to generate ATO CSV content with travel data and unlinked bills (OPTIMIZED)
-async function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Vehicle[], startDate: string, endDate: string, unlinkedBills?: UnlinkedBillOccurrence[], userId?: string, prisma?: any): Promise<string> {
+async function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Vehicle[], startDate: string, endDate: string, unlinkedBills?: UnlinkedBillOccurrence[], userId?: string): Promise<string> {
   const processed = processTransactionsForATO(transactions, trips, vehicles, unlinkedBills);
   
-  // ENTERPRISE OPTIMIZATION: Batch enhance all transactions with tax categories at once
-  let taxCategoryMap = new Map<string, string>();
-  if (userId && prisma && transactions.length > 0) {
-    try {
-      taxCategoryMap = await enhanceTransactionsWithTaxCategories(prisma, userId, transactions);
-    } catch (error) {
-      console.warn('⚠️ Failed to enhance transactions with tax categories, proceeding without enhancement:', error);
-    }
-  }
+  // ENTERPRISE OPTIMIZATION: Transactions are pre-enhanced by core app with tax categories
+  // No need to access database here - core app handles the cache lookup
+  console.log(`📊 Processing ${transactions.length} transactions (pre-enhanced by core app)`);
   
   // PERFORMANCE FIX: Use array and join() instead of string concatenation
   const csvLines: string[] = [];
@@ -333,12 +327,9 @@ async function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicl
     const amount = Math.abs(income.amount);
     const gst = income.gstAmount || (amount * 0.1); // Default 10% GST if not specified
     
-    // ENHANCED: Add tax category to description if available from batch lookup
+    // ENHANCED: Add tax category to description if available from pre-enhanced transaction
     let enhancedDescription = income.description;
-    const taxCategory = taxCategoryMap.get(income.id);
-    if (taxCategory) {
-      enhancedDescription = `${taxCategory} = ${income.description}`;
-    } else if (income.taxCategory) {
+    if (income.taxCategory) {
       enhancedDescription = `${income.taxCategory} = ${income.description}`;
     }
     
@@ -359,12 +350,9 @@ async function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicl
     const subType = expense.expenseType === 'employee' ? 'Other work-related' : 'All other expenses';
     const subTypeDetail = expense.expenseType === 'employee' ? 'Other' : '';
     
-    // ENHANCED: Add tax category to description if available from batch lookup
+    // ENHANCED: Add tax category to description if available from pre-enhanced transaction
     let enhancedDescription = expense.description;
-    const taxCategory = taxCategoryMap.get(expense.id);
-    if (taxCategory) {
-      enhancedDescription = `${taxCategory} = ${expense.description}`;
-    } else if (expense.taxCategory) {
+    if (expense.taxCategory) {
       enhancedDescription = `${expense.taxCategory} = ${expense.description}`;
     }
     
@@ -557,8 +545,8 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
     }
     
     // Generate CSV content using real transaction data, travel data, and unlinked bills
-    // ENHANCED: Pass userId and prisma for tax category lookup from unified intelligence cache
-    const csvContent = await generateATOCSV(limitedTransactions, trips || [], vehicles || [], startDate, endDate, unlinkedBills || [], userId, req.app.locals.prisma);
+    // ENHANCED: Transactions are pre-enhanced by core app with tax categories
+    const csvContent = await generateATOCSV(limitedTransactions, trips || [], vehicles || [], startDate, endDate, unlinkedBills || [], userId);
     const filename = `ATO_myDeductions_${format(new Date(startDate), 'yyyy-MM-dd')}_to_${format(new Date(endDate), 'yyyy-MM-dd')}.csv`;
     
     // MEMORY MONITORING: Check memory after processing
