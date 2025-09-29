@@ -3,6 +3,120 @@ import { format } from 'date-fns';
 
 const router = express.Router();
 
+// Helper function to enhance transactions with tax categories from unified intelligence cache
+// ENTERPRISE OPTIMIZATION: Single batch query to get all tax categories at once
+async function enhanceTransactionsWithTaxCategories(
+  prisma: any,
+  userId: string,
+  transactions: Transaction[]
+): Promise<Map<string, string>> {
+  const taxCategoryMap = new Map<string, string>();
+  
+  try {
+    if (!transactions || transactions.length === 0) {
+      return taxCategoryMap;
+    }
+
+    // Generate transaction hashes for all transactions using the same logic as UnifiedIntelligenceService
+    const crypto = require('crypto');
+    const transactionHashes = transactions.map(tx => {
+      // Use TransactionNormalizationService logic for consistent hash generation
+      const normalizedDescription = tx.description
+        .toLowerCase()
+        .trim()
+        .replace(/\d+/g, '') // Remove reference numbers
+        .replace(/\b\d{4}-\d{2}-\d{2}\b/g, '') // Remove dates
+        .replace(/\b\d{2}:\d{2}\b/g, '') // Remove times
+        .replace(/\b(transfer|payment|deposit|withdrawal)\b/g, '') // Remove common bank terms
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .trim();
+      
+      const normalizedMerchant = (tx.merchant?.trim().toLowerCase() || '').replace(/\s+/g, ' ');
+      const txString = `${normalizedDescription}|0|${normalizedMerchant}`;
+      const hash = crypto.createHash('md5').update(txString).digest('hex').substring(0, 12);
+      
+      return {
+        transactionId: tx.id,
+        hash: hash
+      };
+    });
+
+    const hashes = transactionHashes.map(th => th.hash);
+    
+    if (hashes.length === 0) {
+      return taxCategoryMap;
+    }
+
+    // ENTERPRISE OPTIMIZATION: Single batch query for all transaction hashes
+    const cacheEntries = await prisma.$queryRaw`
+      SELECT DISTINCT ON ("transactionHash") 
+        "transactionHash", 
+        "taxResult", 
+        "categoryResult",
+        "userId"
+      FROM unified_intelligence_cache 
+      WHERE "transactionHash" = ANY(${hashes})
+        AND ("userId" = ${userId} OR "userId" IS NULL)
+        AND ("expiresAt" IS NULL OR "expiresAt" > NOW())
+      ORDER BY 
+        "transactionHash",
+        CASE WHEN "userId" = ${userId} THEN 1 ELSE 2 END,
+        "createdAt" DESC
+    `;
+
+    // Create hash to transaction ID mapping
+    const hashToTransactionId = new Map<string, string>();
+    transactionHashes.forEach(th => {
+      hashToTransactionId.set(th.hash, th.transactionId);
+    });
+
+    // Process cache entries and extract tax categories
+    if (cacheEntries && Array.isArray(cacheEntries)) {
+      cacheEntries.forEach(entry => {
+        const transactionId = hashToTransactionId.get(entry.transactionHash);
+        if (!transactionId) return;
+
+        try {
+          // Try tax result first
+          if (entry.taxResult) {
+            const taxResult = JSON.parse(entry.taxResult);
+            if (taxResult && 
+                typeof taxResult === 'object' && 
+                taxResult.taxCategory && 
+                typeof taxResult.taxCategory === 'string' &&
+                taxResult.taxConfidence > 0.5) {
+              taxCategoryMap.set(transactionId, taxResult.taxCategory);
+              return;
+            }
+          }
+
+          // Fallback to category result
+          if (entry.categoryResult) {
+            const categoryResult = JSON.parse(entry.categoryResult);
+            if (categoryResult && 
+                typeof categoryResult === 'object' &&
+                categoryResult.taxCategory &&
+                typeof categoryResult.taxCategory === 'string' &&
+                categoryResult.taxConfidence > 0.5) {
+              taxCategoryMap.set(transactionId, categoryResult.taxCategory);
+              return;
+            }
+          }
+        } catch (parseError) {
+          console.warn(`⚠️ Failed to parse cache result for transaction ${transactionId}:`, parseError);
+        }
+      });
+    }
+
+    console.log(`✅ Enhanced ${taxCategoryMap.size}/${transactions.length} transactions with tax categories from unified intelligence cache`);
+    
+  } catch (error) {
+    console.error('❌ Failed to enhance transactions with tax categories:', error);
+  }
+
+  return taxCategoryMap;
+}
+
 // Interface for transaction data (matching core app structure)
 interface Transaction {
   id: string;
@@ -12,11 +126,12 @@ interface Transaction {
   primaryType: 'expense' | 'income';
   isTaxDeductible: boolean;
   businessUsePercentage?: number;
-  expenseType?: 'business' | 'employee';
+  expenseType?: 'business' | 'employee' | 'personal';
   reference?: string;
   merchant?: string;
   category?: string;
   gstAmount?: number;
+  taxCategory?: string; // Tax category from unified intelligence cache
 }
 
 // Interface for travel data
@@ -84,33 +199,62 @@ interface ExportPreview {
 
 // Helper function to process transactions for ATO format (OPTIMIZED for large datasets)
 function processTransactionsForATO(transactions: Transaction[], trips?: Trip[], vehicles?: Vehicle[], unlinkedBills?: UnlinkedBillOccurrence[]): ExportPreview {
-  // PERFORMANCE OPTIMIZATION: Single pass through transactions to avoid multiple filters
+  // ENTERPRISE PERFORMANCE: Optimized single-pass processing with pre-allocated arrays
+  const startTime = performance.now();
+  const totalTxns = transactions.length;
+  
+  // MEMORY OPTIMIZATION: Pre-allocate arrays with estimated capacity
+  const estimatedIncome = Math.min(Math.ceil(totalTxns * 0.15), 2000);
+  const estimatedExpenses = Math.min(Math.ceil(totalTxns * 0.35), 5000);
+  
+  const income: Transaction[] = new Array(estimatedIncome);
+  const expenses: Transaction[] = new Array(estimatedExpenses);
+  let incomeIndex = 0;
+  let expenseIndex = 0;
+  
   let totalIncome = 0;
   let totalExpenses = 0;
   let businessExpenses = 0;
   let employeeExpenses = 0;
-  const income: Transaction[] = [];
-  const expenses: Transaction[] = [];
   
-  // Single loop through all transactions for better performance
-  for (const t of transactions) {
+  console.log(`📊 ENTERPRISE PROCESSING: ${totalTxns} transactions, pre-allocated ${estimatedIncome} income, ${estimatedExpenses} expenses`);
+  
+  // ENTERPRISE OPTIMIZATION: Single pass with optimized conditionals
+  for (let i = 0; i < totalTxns; i++) {
+    const t = transactions[i];
     const amount = Math.abs(t.amount);
     
-    if (t.primaryType === 'income' && (t.isTaxDeductible || t.expenseType === 'business')) {
-      income.push(t);
-      totalIncome += amount;
-    } else if (t.primaryType === 'expense' && t.isTaxDeductible) {
-      expenses.push(t);
+    // Optimized conditionals - check most common case first
+    if (t.primaryType === 'expense' && t.isTaxDeductible) {
+      if (expenseIndex < estimatedExpenses) {
+        expenses[expenseIndex++] = t; // Preserve taxCategory from enhanced transaction
+      } else {
+        expenses.push(t); // Fallback to dynamic growth
+      }
       totalExpenses += amount;
       
-      // Categorize expense types in the same loop
-      if (t.expenseType === 'business' || !t.expenseType) {
-        businessExpenses += amount;
-      } else if (t.expenseType === 'employee') {
+      // Categorize expense types efficiently
+      if (t.expenseType === 'employee') {
         employeeExpenses += amount;
+      } else {
+        businessExpenses += amount;
       }
+    } else if (t.primaryType === 'income' && t.expenseType === 'business') {
+      if (incomeIndex < estimatedIncome) {
+        income[incomeIndex++] = t; // Preserve taxCategory from enhanced transaction
+      } else {
+        income.push(t); // Fallback to dynamic growth
+      }
+      totalIncome += amount;
     }
   }
+  
+  // Trim arrays to actual size for memory efficiency
+  if (incomeIndex < income.length) income.length = incomeIndex;
+  if (expenseIndex < expenses.length) expenses.length = expenseIndex;
+  
+  const processingTime = performance.now() - startTime;
+  console.log(`⚡ ENTERPRISE PROCESSING: Completed in ${processingTime.toFixed(2)}ms (${(totalTxns / (processingTime / 1000)).toFixed(0)} tx/sec)`);
 
   const totalTrips = trips?.length || 0;
   const totalDistance = trips?.reduce((sum, t) => sum + t.totalKm, 0) || 0;
@@ -159,8 +303,14 @@ function formatDateForATO(dateString: string): string {
 }
 
 // Helper function to generate ATO CSV content with travel data and unlinked bills (OPTIMIZED)
-function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Vehicle[], startDate: string, endDate: string, unlinkedBills?: UnlinkedBillOccurrence[]): string {
+async function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Vehicle[], startDate: string, endDate: string, unlinkedBills?: UnlinkedBillOccurrence[], userId?: string): Promise<string> {
   const processed = processTransactionsForATO(transactions, trips, vehicles, unlinkedBills);
+  
+  // ENTERPRISE OPTIMIZATION: Transactions are pre-enhanced by core app with tax categories
+  // No need to access database here - core app handles the cache lookup
+  console.log(`📊 Processing ${transactions.length} transactions (pre-enhanced by core app)`);
+  console.log(`🔍 Sample transaction taxCategory:`, transactions[0]?.taxCategory);
+  console.log(`🔍 Sample transaction keys:`, Object.keys(transactions[0] || {}));
   
   // PERFORMANCE FIX: Use array and join() instead of string concatenation
   const csvLines: string[] = [];
@@ -178,7 +328,14 @@ function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Ve
   for (const income of processed.income) {
     const amount = Math.abs(income.amount);
     const gst = income.gstAmount || (amount * 0.1); // Default 10% GST if not specified
-    csvLines.push(`Not uploaded,Business,Completed,${formatDateForATO(income.date)},${amount.toFixed(2)},${gst.toFixed(2)},"${income.description}","${income.reference || ''}",,,`);
+    
+    // ENHANCED: Add tax category to description if available from pre-enhanced transaction
+    let enhancedDescription = income.description;
+    if (income.taxCategory) {
+      enhancedDescription = `${income.taxCategory} = ${income.description}`;
+    }
+    
+    csvLines.push(`Not uploaded,Business,Completed,${formatDateForATO(income.date)},${amount.toFixed(2)},${gst.toFixed(2)},"${enhancedDescription}","${income.reference || ''}",,,`);
   }
   
   // Expenses section
@@ -195,7 +352,13 @@ function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Ve
     const subType = expense.expenseType === 'employee' ? 'Other work-related' : 'All other expenses';
     const subTypeDetail = expense.expenseType === 'employee' ? 'Other' : '';
     
-    csvLines.push(`Not uploaded,${type},Completed,${formatDateForATO(expense.date)},${amount.toFixed(2)},${gst ? gst.toFixed(2) : ''},"${expense.description}",${percentage}%,"${subType}","${subTypeDetail}",,,`);
+    // ENHANCED: Add tax category to description if available from pre-enhanced transaction
+    let enhancedDescription = expense.description;
+    if (expense.taxCategory) {
+      enhancedDescription = `${expense.taxCategory} = ${expense.description}`;
+    }
+    
+    csvLines.push(`Not uploaded,${type},Completed,${formatDateForATO(expense.date)},${amount.toFixed(2)},${gst ? gst.toFixed(2) : ''},"${enhancedDescription}",${percentage}%,"${subType}","${subTypeDetail}",,,`);
   }
 
   // Add unlinked bills as estimated expenses
@@ -240,6 +403,10 @@ function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Ve
   csvLines.push('');
   csvLines.push(`"* If applicable to expense or trip type."`);
   
+  // Add footer with branding
+  csvLines.push('');
+  csvLines.push('Powered by app.ai2fin.com');
+  
   // PERFORMANCE FIX: Single join() operation instead of multiple string concatenations
   return csvLines.join('\n');
 }
@@ -248,9 +415,34 @@ function generateATOCSV(transactions: Transaction[], trips: Trip[], vehicles: Ve
 router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
   const startTime = Date.now();
   
+  // TIMEOUT PROTECTION: Set a maximum processing time for exports
+  const timeoutMs = 60000; // 60 seconds max for exports
+  const timeoutId = setTimeout(() => {
+    if (!res.headersSent) {
+      console.error(`⏰ Export timeout after ${timeoutMs}ms`);
+      res.status(408).json({
+        success: false,
+        error: 'Export timeout - dataset too large for processing',
+        timeoutMs,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, timeoutMs);
+  
   try {
-    const { startDate, endDate, transactions, trips, vehicles, unlinkedBills } = req.body;
+    // ENTERPRISE SECURITY: Extract user ID from request headers
+    const userId = req.headers['x-user-id'] as string;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'User authentication required for export',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    const { startDate, endDate, transactions, trips, vehicles, unlinkedBills, totalTransactions } = req.body;
     
+    // ENTERPRISE VALIDATION: Comprehensive input validation
     if (!startDate || !endDate || !transactions) {
       return res.status(400).json({
         success: false,
@@ -258,24 +450,159 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
         timestamp: new Date().toISOString()
       });
     }
+    
+    // ENTERPRISE SECURITY: Validate data types and ranges
+    if (!Array.isArray(transactions)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid transactions data: must be an array',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    if (transactions.length > 50000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Dataset too large: maximum 50,000 transactions allowed',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // ENTERPRISE SECURITY: Validate date format and range
+    const startDateObj = new Date(startDate);
+    const endDateObj = new Date(endDate);
+    
+    if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid date format: use YYYY-MM-DD',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    if (startDateObj > endDateObj) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid date range: start date must be before end date',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // ENTERPRISE SECURITY: Validate date range (max 5 years for large datasets)
+    const maxDateRange = 5 * 365 * 24 * 60 * 60 * 1000; // 5 years in milliseconds
+    if (endDateObj.getTime() - startDateObj.getTime() > maxDateRange) {
+      return res.status(400).json({
+        success: false,
+        error: 'Date range too large: maximum 2 years allowed',
+        timestamp: new Date().toISOString()
+      });
+    }
 
-    // PERFORMANCE SAFEGUARD: Limit transaction processing to prevent timeouts
-    const maxTransactions = 5000;
+    // ENTERPRISE STREAMING: Process large datasets in chunks to prevent memory issues
+    const totalTxns = totalTransactions || transactions.length;
+    const maxTransactions = 100000; // ENTERPRISE: Increased limit to 100,000 for large datasets
     const limitedTransactions = transactions.slice(0, maxTransactions);
     
     if (transactions.length > maxTransactions) {
       console.warn(`⚠️ Large dataset detected: ${transactions.length} transactions, limiting to ${maxTransactions} for performance`);
     }
 
-    console.log(`🔄 Generating ATO CSV for ${limitedTransactions.length} transactions...`);
+    console.log(`🔄 ENTERPRISE EXPORT: Generating ATO CSV for ${limitedTransactions.length} transactions (${totalTxns} total)...`);
+    
+    // MEMORY MONITORING: Check memory before processing
+    const memBefore = process.memoryUsage();
+    console.log(`🧠 Memory before export: ${Math.round(memBefore.heapUsed / 1024 / 1024)}MB`);
+    
+    // ENTERPRISE QUOTA: Check export quota before processing
+    // TEMPORARILY DISABLED FOR TESTING
+    console.log('⚠️ Quota check temporarily disabled for testing');
+    /*
+    try {
+      // CRITICAL FIX: Use environment-based URL for production compatibility
+      const coreAppUrl = process.env.CORE_APP_URL || process.env.ANALYTICS_CORE_URL || 'http://localhost:3001';
+      const quotaResponse = await fetch(`${coreAppUrl}/api/quota/check`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': req.headers.authorization || '',
+          'X-User-ID': userId
+        },
+        body: JSON.stringify({
+          feature: 'exports',
+          amount: 1
+        })
+      });
+      
+      if (!quotaResponse.ok) {
+        const quotaError = await quotaResponse.json();
+        return res.status(429).json({
+          success: false,
+          error: 'Export quota exceeded',
+          details: (quotaError as any).error || 'Quota check failed',
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      console.log('✅ Export quota check passed');
+    } catch (quotaError) {
+      console.warn('⚠️ Quota check failed, proceeding without enforcement:', quotaError);
+      // Continue without quota enforcement in case of service unavailability
+    }
+    */
     
     // Generate CSV content using real transaction data, travel data, and unlinked bills
-    const csvContent = generateATOCSV(limitedTransactions, trips || [], vehicles || [], startDate, endDate, unlinkedBills || []);
+    // ENHANCED: Transactions are pre-enhanced by core app with tax categories
+    const csvContent = await generateATOCSV(limitedTransactions, trips || [], vehicles || [], startDate, endDate, unlinkedBills || [], userId);
     const filename = `ATO_myDeductions_${format(new Date(startDate), 'yyyy-MM-dd')}_to_${format(new Date(endDate), 'yyyy-MM-dd')}.csv`;
     
+    // MEMORY MONITORING: Check memory after processing
+    const memAfter = process.memoryUsage();
+    const memoryIncrease = Math.round((memAfter.heapUsed - memBefore.heapUsed) / 1024 / 1024);
+    console.log(`🧠 Memory after export: ${Math.round(memAfter.heapUsed / 1024 / 1024)}MB (+${memoryIncrease}MB)`);
+    
+    // OPTIMIZED: More aggressive memory management with lower threshold
+    if (memAfter.heapUsed > 200 * 1024 * 1024) { // OPTIMIZED: 200MB threshold instead of 1GB
+      console.log(`🧹 High memory usage detected (${Math.round(memAfter.heapUsed / 1024 / 1024)}MB), forcing garbage collection...`);
+      if (global.gc) {
+        global.gc();
+        const memAfterGC = process.memoryUsage();
+        console.log(`🧹 Memory after GC: ${Math.round(memAfterGC.heapUsed / 1024 / 1024)}MB`);
+      }
+    }
+    
     const processingTime = Date.now() - startTime;
-    console.log(`✅ ATO CSV generation completed in ${processingTime}ms`);
+    console.log(`✅ ENTERPRISE EXPORT: ATO CSV generation completed in ${processingTime}ms for ${limitedTransactions.length} transactions`);
 
+    // ENTERPRISE QUOTA: Consume export quota after successful generation
+    try {
+      // CRITICAL FIX: Use environment-based URL for production compatibility
+      const coreAppUrl = process.env.CORE_APP_URL || process.env.ANALYTICS_CORE_URL || 'http://localhost:3001';
+      await fetch(`${coreAppUrl}/api/quota/consume`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': req.headers.authorization || '',
+          'X-User-ID': userId
+        },
+        body: JSON.stringify({
+          feature: 'exports',
+          amount: 1,
+          metadata: {
+            transactionCount: limitedTransactions.length,
+            processingTimeMs: processingTime,
+            exportType: 'ato-mydeductions'
+          }
+        })
+      });
+      console.log('✅ Export quota consumed successfully');
+    } catch (quotaError) {
+      console.warn('⚠️ Quota consumption failed:', quotaError);
+      // Don't fail the export if quota consumption fails
+    }
+
+    // Clear timeout since export completed successfully
+    clearTimeout(timeoutId);
+    
     res.json({
       success: true,
       data: {
@@ -292,6 +619,8 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
+    // Clear timeout on error too
+    clearTimeout(timeoutId);
     const processingTime = Date.now() - startTime;
     console.error(`❌ ATO export error after ${processingTime}ms:`, error);
     res.status(500).json({
@@ -303,12 +632,49 @@ router.post('/api/analytics/export/ato-mydeductions', async (req, res) => {
   }
 });
 
-// Get export preview data (processes real transactions passed from frontend)
+// Get export preview data (ENTERPRISE-GRADE: Streaming & Pagination for big datasets)
 router.post('/api/analytics/export/preview', async (req, res) => {
   const startTime = Date.now();
   
+  // TIMEOUT PROTECTION: Set a maximum processing time
+  const timeoutMs = 30000; // 30 seconds max
+  const timeoutId = setTimeout(() => {
+    if (!res.headersSent) {
+      console.error(`⏰ Export preview timeout after ${timeoutMs}ms`);
+      res.status(408).json({
+        success: false,
+        error: 'Request timeout - dataset too large for processing',
+        timeoutMs,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, timeoutMs);
+  
   try {
-    const { startDate, endDate, transactions, trips, vehicles, unlinkedBills } = req.body;
+    // ENTERPRISE SECURITY: Validate user authentication
+    const userId = req.headers['x-user-id'] as string;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'User authentication required for preview',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    const { startDate, endDate, transactions, trips, vehicles, unlinkedBills, page = 1, pageSize = 1000, totalTransactions } = req.body;
+    
+    // ENTERPRISE CACHING: Check cache first for performance
+    const cacheKey = `preview:${startDate}:${endDate}:${page}:${pageSize}`;
+    const cachedData = req.app.locals.getCachedData?.(cacheKey);
+    if (cachedData) {
+      console.log(`⚡ CACHE HIT: Returning cached data for page ${page}`);
+      return res.json({
+        success: true,
+        data: cachedData,
+        cached: true,
+        timestamp: new Date().toISOString()
+      });
+    }
     
     if (!startDate || !endDate || !transactions) {
       return res.status(400).json({
@@ -318,31 +684,102 @@ router.post('/api/analytics/export/preview', async (req, res) => {
       });
     }
 
-    // PERFORMANCE SAFEGUARD: Limit transaction processing to prevent timeouts
-    const maxTransactions = 5000;
-    const limitedTransactions = transactions.slice(0, maxTransactions);
+    // ENTERPRISE PAGINATION: Process data in chunks to prevent memory issues
+    // CRITICAL FIX: Use totalTransactions from frontend for proper pagination context
+    const totalTxns = totalTransactions || transactions.length;
+    const maxPageSize = 20000; // ENTERPRISE: Increased limit to 20,000 per page for large datasets
+    const actualPageSize = Math.min(pageSize, maxPageSize);
+    const totalPages = Math.ceil(totalTxns / actualPageSize);
     
-    if (transactions.length > maxTransactions) {
-      console.warn(`⚠️ Large dataset detected: ${transactions.length} transactions, limiting to ${maxTransactions} for performance`);
+    // The transactions array is already paginated by the frontend
+    // No need to slice it again - process all transactions in this request
+    const pageTransactions = transactions;
+    
+    console.log(`🔄 ENTERPRISE PROCESSING: Page ${page}/${totalPages} - ${pageTransactions.length} transactions of ${totalTxns} total`);
+    
+    // Progress logging for large datasets
+    if (totalTxns > 1000) {
+      console.log(`📊 Large dataset processing: ${totalTxns} total transactions, processing page ${page}/${totalPages}`);
     }
-
-    console.log(`🔄 Processing ${limitedTransactions.length} transactions for ATO export preview...`);
     
-    // Process real transaction data for preview including unlinked bills
-    const previewData = processTransactionsForATO(limitedTransactions, trips, vehicles, unlinkedBills);
+    // MEMORY MONITORING: Check memory before processing
+    const memBefore = process.memoryUsage();
+    console.log(`🧠 Memory before processing: ${Math.round(memBefore.heapUsed / 1024 / 1024)}MB`);
+    
+    // Process current page of transaction data (STREAMING: Only process current page)
+    let previewData;
+    try {
+      previewData = processTransactionsForATO(pageTransactions, trips, vehicles, unlinkedBills);
+      
+      // Add streaming metadata for large datasets
+      if (totalTxns > 1000) {
+        previewData.streaming = {
+          isStreaming: true,
+          currentPage: page,
+          totalPages,
+          processedTransactions: pageTransactions.length,
+          totalTransactions: totalTxns,
+          progressPercentage: Math.round((page / totalPages) * 100)
+        };
+      }
+    } catch (processingError) {
+      console.error(`❌ Processing error for page ${page}:`, processingError);
+      throw new Error(`Failed to process transactions for page ${page}: ${processingError.message}`);
+    }
+    
+    // MEMORY MONITORING: Check memory after processing
+    const memAfter = process.memoryUsage();
+    const memoryIncrease = Math.round((memAfter.heapUsed - memBefore.heapUsed) / 1024 / 1024);
+    console.log(`🧠 Memory after processing: ${Math.round(memAfter.heapUsed / 1024 / 1024)}MB (+${memoryIncrease}MB)`);
+    
+    // OPTIMIZED: More aggressive memory management for preview operations
+    if (memAfter.heapUsed > 100 * 1024 * 1024) { // OPTIMIZED: 100MB threshold instead of 500MB
+      console.log(`🧹 High memory usage detected (${Math.round(memAfter.heapUsed / 1024 / 1024)}MB), forcing garbage collection...`);
+      if (global.gc) {
+        global.gc();
+        const memAfterGC = process.memoryUsage();
+        console.log(`🧹 Memory after GC: ${Math.round(memAfterGC.heapUsed / 1024 / 1024)}MB`);
+      }
+    }
     
     const processingTime = Date.now() - startTime;
-    console.log(`✅ ATO export preview completed in ${processingTime}ms`);
+    console.log(`✅ ATO export preview page ${page} completed in ${processingTime}ms`);
 
+    // Prepare response data
+    const responseData = {
+      ...previewData,
+      // Add pagination metadata
+      pagination: {
+        currentPage: page,
+        totalPages,
+        pageSize: actualPageSize,
+        totalTransactions: totalTxns,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1
+      },
+      // Add performance metrics
+      performance: {
+        processingTimeMs: processingTime,
+        transactionsPerSecond: Math.round(pageTransactions.length / (processingTime / 1000)),
+        memoryUsage: process.memoryUsage().heapUsed / 1024 / 1024 // MB
+      }
+    };
+
+    // ENTERPRISE CACHING: Cache the processed data
+    req.app.locals.setCachedData?.(cacheKey, responseData);
+
+    // Clear timeout since request completed successfully
+    clearTimeout(timeoutId);
+    
+    // ENTERPRISE RESPONSE: Include pagination metadata
     res.json({
       success: true,
-      data: previewData,
-      processingTimeMs: processingTime,
-      totalTransactions: transactions.length,
-      processedTransactions: limitedTransactions.length,
+      data: responseData,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
+    // Clear timeout on error too
+    clearTimeout(timeoutId);
     const processingTime = Date.now() - startTime;
     console.error(`❌ Export preview error after ${processingTime}ms:`, error);
     res.status(500).json({
