@@ -30,7 +30,7 @@ STRIPE_PRICE_ID_YEARLY=price_xxxxxxxxxxxxx              # Your yearly price ID
 1. In the product, click **"Add price"**
 2. Select:
    - Pricing model: **Standard pricing**
-   - Price: `23.00 AUD`
+   - Price: `23.00 USD`
    - Billing period: **Monthly**
 3. Save and copy the Price ID (e.g., `price_1RzZSRLs39ChsYkALp8dR8zl`)
 
@@ -38,7 +38,7 @@ STRIPE_PRICE_ID_YEARLY=price_xxxxxxxxxxxxx              # Your yearly price ID
 1. Click **"Add another price"**
 2. Select:
    - Pricing model: **Standard pricing**
-   - Price: `222.00 AUD`
+   - Price: `222.00 USD`
    - Billing period: **Yearly**
 3. Save and copy the Price ID
 
