@@ -155,7 +155,7 @@ tmp/
 # ==================================
 # PACKAGE MANAGERS
 # ==================================
-package-lock.json
+# package-lock.json  # Commented out - needed for CI/CD
 yarn.lock
 pnpm-lock.yaml
 .pnpm-store/
