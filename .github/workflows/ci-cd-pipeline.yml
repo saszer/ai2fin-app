@@ -68,27 +68,27 @@ jobs:
       
       - name: Install dependencies
         run: |
-          cd ai2-${{ matrix.service }}
+          cd embracingearthspace/ai2-${{ matrix.service }}
           npm ci
       
       - name: Lint
         run: |
-          cd ai2-${{ matrix.service }}
+          cd embracingearthspace/ai2-${{ matrix.service }}
           npm run lint || true
       
       - name: Type check
         run: |
-          cd ai2-${{ matrix.service }}
+          cd embracingearthspace/ai2-${{ matrix.service }}
           npm run typecheck
       
       - name: Run tests
         run: |
-          cd ai2-${{ matrix.service }}
+          cd embracingearthspace/ai2-${{ matrix.service }}
           npm test -- --passWithNoTests
       
       - name: Build
         run: |
-          cd ai2-${{ matrix.service }}
+          cd embracingearthspace/ai2-${{ matrix.service }}
           npm run build
 
   # 3. Build Docker Images
@@ -133,7 +133,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v5
         with:
-          context: ./ai2-${{ matrix.service }}
+          context: ./embracingearthspace/ai2-${{ matrix.service }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -164,7 +164,7 @@ jobs:
   # 4. Deploy PR Preview
   deploy-preview:
     if: github.event_name == 'pull_request'
-    needs: build-images
+    needs: [security-scan, build-test]
     runs-on: ubuntu-latest
     
     steps:
@@ -174,18 +174,17 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
       
       - name: Deploy preview app
+        working-directory: ./embracingearthspace
         run: |
           # embracingearth.space branding
           export APP_NAME="ai2-pr-${{ github.event.pull_request.number }}"
           flyctl apps create $APP_NAME --org embracingearth || true
           
-          # Deploy with preview config
+          # Deploy with preview config - let Fly.io build from Dockerfile
           flyctl deploy \
             --app $APP_NAME \
             --config fly.preview.toml \
-            --build-arg COMMIT_SHA=${{ github.sha }} \
-            --env DATABASE_URL="${{ secrets.PREVIEW_DATABASE_URL }}" \
-            --env EMBRACING_EARTH_URL="https://embracingearth.space"
+            --build-arg COMMIT_SHA=${{ github.sha }}
       
       - name: Comment PR with preview URL
         uses: actions/github-script@v7
@@ -201,7 +200,7 @@ jobs:
   # 5. Deploy to Staging
   deploy-staging:
     if: github.ref == 'refs/heads/develop'
-    needs: build-images
+    needs: [security-scan, build-test]
     runs-on: ubuntu-latest
     environment: staging
     
@@ -212,16 +211,17 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
       
       - name: Deploy to staging
+        working-directory: ./embracingearthspace
         run: |
+          # Let Fly.io build from Dockerfile instead of using pre-built image
           flyctl deploy \
             --app ai2-staging \
-            --config fly.staging.toml \
-            --image ${{ needs.build-images.outputs.image-tag }}
+            --config fly.staging.toml
 
   # 6. Deploy to Production
   deploy-production:
     if: github.ref == 'refs/heads/main'
-    needs: build-images
+    needs: [security-scan, build-test]
     runs-on: ubuntu-latest
     environment: production
     
@@ -232,12 +232,13 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
       
       - name: Deploy to production
+        working-directory: ./embracingearthspace
         run: |
           # embracingearth.space deployment
+          # Let Fly.io build from Dockerfile instead of using pre-built image
           flyctl deploy \
             --app ai2-production \
-            --config fly.production.toml \
-            --image ${{ needs.build-images.outputs.image-tag }} \
+            --config fly.toml \
             --strategy rolling
 
   # 7. Cleanup PR Previews
