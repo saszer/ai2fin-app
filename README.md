@@ -1,15 +1,41 @@
-# AI2 Enterprise Platform 🏢
+# AI2 Financial Platform 🚀
 
 ## 🚀 Overview
 
-AI2 Enterprise Platform is a comprehensive, modular financial management system designed for enterprise-scale deployment. The platform leverages artificial intelligence to provide intelligent transaction categorization, tax deduction analysis, advanced analytics, and automated financial insights.
+AI2 Financial Platform is a comprehensive, modular financial management system built with enterprise-grade architecture. Designed for individuals, businesses, and developers, AI2 combines intelligent automation with powerful customization to transform how you manage finances.
+
+### Core Features
+
+**Transaction Management**
+- Smart categorization with AI-powered insights
+- Bulk CSV import/export for seamless data migration
+- Custom categories and automated rules
+- Advanced filtering and search capabilities
+
+**Analytics & Reporting**
+- Real-time dashboards and visualizations
+- Tax deduction analysis and optimization
+- Spending patterns and trend analysis
+- Customizable reports for any period
+
+**Integrations & Automation**
+- Bank feed connections for automatic sync
+- Email processing for receipt extraction
+- Multi-channel notifications (email, SMS, push)
+- Webhook support for custom workflows
+
+**Built for Scale**
+- Microservices architecture for flexibility
+- Self-hosting or managed cloud options
+- Full API access for custom integrations
+- Team collaboration and multi-user support
 
 ## 🏗️ Architecture
 
 The platform follows a **microservices architecture** with 7 independent, scalable services:
 
 ```
-AI2 Enterprise Platform
+AI2 Financial Platform
 ├── 📦 @ai2/shared              # Shared utilities, types, and configurations
 ├── 🏠 @ai2/core-app            # Main application server (Port 3001)
 ├── 🤖 @ai2/ai-modules          # AI-powered financial intelligence (Port 3002)
@@ -244,9 +270,9 @@ npm run start:core:standalone
 npm run start:premium
 ```
 
-### 3. 🏢 **Enterprise** (Full Platform)
+### 3. 🏢 **Full Stack** (Complete Platform)
 **Services**: All 6 services  
-**Use Case**: Complete enterprise solution  
+**Use Case**: Complete solution with all features  
 **Resources**: High (6 services)
 
 ```bash
@@ -289,9 +315,9 @@ npm run start:all
    ```
 
 ### Production URLs
-- **Application**: `https://app.embracingearth.space`
-- **Status Page**: `https://status.embracingearth.space`
-- **API**: `https://app.embracingearth.space/api`
+- **Application**: `https://app.ai2fin.com`
+- **Status Page**: `https://status.ai2fin.com`
+- **API**: `https://api.ai2fin.com/
 
 For detailed deployment instructions, see [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md)
 
@@ -299,7 +325,7 @@ For detailed deployment instructions, see [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_C
 
 ### Cluster Mode Configuration
 
-The platform includes an enterprise-grade cluster mode for maximum performance:
+The platform includes production-grade cluster mode for maximum performance:
 
 ```bash
 # Development mode (no clustering)
@@ -308,7 +334,7 @@ npm run start:core:standalone
 # Cluster mode (4 workers)
 CLUSTER_MODE=true npm start
 
-# Enterprise mode (8 workers + all optimizations)
+# High-performance mode (8 workers + all optimizations)
 npm run start:enterprise
 ```
 
@@ -324,7 +350,7 @@ npm run start:enterprise
    - Redis caching layer
    - Advanced rate limiting
 
-3. **Phase 3: Cloud Enterprise** (Full Scale)
+3. **Phase 3: Cloud Scale** (Full Multi-Region)
    - Multi-region deployment on Fly.io
    - Auto-scaling based on load
    - Global load balancing
@@ -461,7 +487,7 @@ DATABASE_URL=postgresql://user:pass@localhost:5432/ai2
 REDIS_URL=redis://localhost:6379
 
 # Production URLs
-BRAND_URL=https://embracingearth.space
+BRAND_URL=https://ai2fin.com
 ```
 
 ### Feature Flags
@@ -498,7 +524,7 @@ npm run health:check
 
 ### Production Monitoring Stack
 
-- **Status Page**: Public uptime monitoring at `status.embracingearth.space`
+- **Status Page**: Public uptime monitoring at `status.ai2fin.com`
 - **Metrics**: Prometheus + Grafana dashboards
 - **Alerts**: Configurable alerts for downtime, high CPU, memory issues
 - **Logs**: Centralized logging with search capabilities
@@ -518,21 +544,6 @@ Key performance indicators:
 - **Error Rates**: Service reliability
 - **AI Accuracy**: ML model performance
 - **Resource Usage**: CPU, memory, disk
-
-## 💰 Cost Optimization
-
-### Estimated Monthly Costs (Production)
-- **Fly.io**: $50-100 (2-4 instances)
-- **GCP Cloud SQL**: $25-50 (db-f1-micro)
-- **GCP Storage**: $5-10
-- **Cloudflare**: Free tier
-- **Total**: ~$80-160/month
-
-### Cost Saving Tips
-1. Use Fly.io autoscaling to match demand
-2. Schedule non-production environments to shut down after hours
-3. Use GCS lifecycle policies for old uploads
-4. Monitor and optimize database queries
 
 ## 🔧 Troubleshooting
 
@@ -566,21 +577,62 @@ flyctl ssh console --app ai2-production
 psql $DATABASE_URL -c "SELECT 1;"
 ```
 
-## 📜 License
-
-This project is proprietary software. See [LICENSE](./LICENSE) for details.
-
 ## 🤝 Contributing
 
-Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines.
+We welcome community contributions! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+
+**Ways to contribute:**
+- 🐛 Report bugs and issues
+- 💡 Suggest new features
+- 🔧 Submit code improvements
+- 📚 Improve documentation
+- 💬 Help other users in discussions
+
+## 💝 Community & Support
+
+AI2 is built by a global community of developers, financial professionals, and enthusiasts.
+
+### Join Our Community
+- 🛠️ **Developers** - Build with our APIs and services
+- 💼 **Businesses** - Streamline your financial operations
+- 📊 **Analysts** - Leverage powerful insights and reporting
+- 🤝 **Contributors** - Help shape the future of financial tech
+- 🌟 **Users** - Get support and share best practices
+
+### Support the Project
+
+**Free Ways:**
+- ⭐ **Star this repository** to show support
+- 💬 **Join discussions** and help other users
+- 🐛 **Report bugs** and suggest features
+- 💻 **Contribute code** to make AI2 better
+- 📖 **Improve documentation** and guides
+
+**Financial Support:**
+- 💰 **Community Funding** - Support via Open Collective
+- 💎 **Application Access** - Get the integrated experience at [ai2fin.com](https://ai2fin.com)
+- 🎁 **Sponsorship** - Become a project sponsor
+
+### Community Benefits
+We offer special access and benefits for:
+- 🎓 Students and educators (free application access)
+- 🌍 Open source projects (free application access)
+- 💚 Non-profit organizations (discounted access)
+- 🌟 Active contributors (free access + rewards)
+
+Contact hi@ai2fin.com for community benefits.
 
 ## 📞 Support
 
+- **Community**: [GitHub Discussions](../../discussions) - Ask questions and share ideas
+- **Issues**: Create [GitHub issues](../../issues) for bugs and features
 - **Documentation**: See individual service READMEs
-- **Issues**: Create GitHub issues for bugs and features
-- **Enterprise Support**: Contact our enterprise team
-- **Status Page**: https://status.embracingearth.space
+- **Email**: hi@ai2fin.com
+- **Status Page**: https://status.ai2fin.com
 
 ---
 
-**AI2 Enterprise Platform** - Intelligent Financial Management at Scale 🚀
+**AI2 Financial Platform** - Intelligent Financial Management at Scale 🚀  
+*AI-Powered • Microservices Architecture • Community Driven*
+
+🚀 **Get Started:** [ai2fin.com](https://ai2fin.com) | 🤝 **Support Us:** [Open Collective](https://opencollective.com/ai2fin) | 📖 **Docs:** [docs.ai2fin.com](https://docs.ai2fin.com)
