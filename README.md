@@ -626,7 +626,7 @@ Contact hi@ai2fin.com for community benefits.
 
 - **Community**: [GitHub Discussions](../../discussions) - Ask questions and share ideas
 - **Issues**: Create [GitHub issues](../../issues) for bugs and features
-- **Documentation**: See individual service READMEs
+- **Documentation**: docs.ai2fin.com
 - **Email**: hi@ai2fin.com
 - **Status Page**: https://status.ai2fin.com
 
