@@ -1,6 +1,5 @@
-# AI2 Financial Platform - Open Core Model
-# Core is open source (MIT) with optional premium features
+# AI2 Financial Platform - Commercial Software
+# Usage requires a paid license
 
-open_collective: ai2fin
-custom: ['https://ai2fin.com/pricing', 'https://ai2fin.com']
+custom: ['https://ai2fin.com#pricing']
 

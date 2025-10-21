@@ -78,26 +78,27 @@ embracingearthspace/
 
 ## 📜 License & Contributor Rights
 
-**AI2 uses a developer-first model:**
-- All microservices and AI: **MIT License** (fully open source)
-- Integrated application: Separate from open source components
+**AI2 is commercial software.** The source code is visible for transparency, but usage requires a paid license.
 
-By contributing to the **open source services** (AI, analytics, connectors, etc.), you agree that:
-- Your contribution will be licensed under the MIT License
-- Your contribution remains open source forever
-- You retain copyright to your contribution
-- Anyone can use your contribution freely
-- Contributions are primarily to open source components
+By contributing to AI2, you agree that:
+- Your contribution becomes part of the commercial software
+- AI2 Financial Platform has full rights to use, modify, and distribute your contribution
+- Your contribution will be subject to the AI2 Commercial License
+- You retain attribution credit for your contribution
+- You do not automatically receive free license rights
+- You may be eligible for contributor benefits (see below)
 
 ### Contributor Benefits
 
-Active contributors receive:
-- 🎁 **Free application access** for personal use
+Significant contributors may receive:
+- 🎁 **Complimentary license** for personal use (at our discretion)
 - ⭐ **Public recognition** in release notes and README
-- 🏆 **Early access** to new services and features
-- 💬 **Direct access** to maintainers
-- 📢 **Promotion** of your work
-- 🎯 **Influence** on roadmap and priorities
+- 🏆 **Early access** to new features
+- 💬 **Direct communication** with core team
+- 💰 **Contributor discounts** on paid licenses
+- 🎯 **Influence** on product roadmap
+
+Contact hi@ai2fin.com after making substantial contributions to discuss benefits.
 
 ### Recognition Levels
 

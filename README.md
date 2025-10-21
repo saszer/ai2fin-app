@@ -1,8 +1,13 @@
 # AI2 Financial Platform 🚀
 
+> **⚠️ COMMERCIAL SOFTWARE:** This software requires a paid license for any usage. Source code is visible for transparency and evaluation only.  
+> **[Get License](https://ai2fin.com/pricing)** | **[30-Day Evaluation](https://ai2fin.com)**
+
 ## 🚀 Overview
 
 AI2 Financial Platform is a comprehensive, modular financial management system built with enterprise-grade architecture. Designed for individuals, businesses, and developers, AI2 combines intelligent automation with powerful customization to transform how you manage finances.
+
+**Licensing:** Source-visible commercial software. The source code is publicly available for transparency, security auditing, and evaluation, but **all usage requires a valid paid license**.
 
 ### Core Features
 
@@ -577,50 +582,53 @@ flyctl ssh console --app ai2-production
 psql $DATABASE_URL -c "SELECT 1;"
 ```
 
+## 📜 Licensing & Purchase
+
+### Commercial License Required
+
+**AI2 Financial Platform is commercial software.** The source code is publicly visible for transparency and evaluation, but **all usage requires a valid paid license**.
+
+### Why Source-Visible?
+
+We believe in transparency while maintaining sustainability:
+- 🔍 **Security Auditing** - Verify security and privacy practices
+- 🔐 **Trust** - See exactly what the software does
+- 📋 **Compliance** - Audit for regulatory requirements
+- 🎯 **Evaluation** - Assess technical fit before purchasing
+
+### License Options
+
+Visit **[ai2fin.com/pricing](https://ai2fin.com/pricing)** for:
+- 👤 **Personal License** - For individuals
+- 💼 **Business License** - For companies
+- 🏢 **Enterprise License** - For large organizations
+- 👨‍💻 **Developer License** - For development teams
+- 🖥️ **Self-Hosted License** - Deploy on your infrastructure
+
+### Evaluation Period
+
+- ✅ **30-day evaluation** for assessment purposes
+- ✅ View and test all features
+- ✅ No credit card required for trial
+- ⚠️ Must purchase license after 30 days for continued use
+
+### Purchase & Support
+
+**Get Licensed:** [ai2fin.com/pricing](https://ai2fin.com/pricing)  
+**Sales Inquiries:** hi@ai2fin.com  
+**Support:** Available to licensed users
+
 ## 🤝 Contributing
 
-We welcome community contributions! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+We welcome contributions from licensed users and contributors! Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+
+**Note:** By contributing, you grant AI2 Financial Platform rights to use your contribution under our commercial license. Contributors may be eligible for licensing benefits.
 
 **Ways to contribute:**
 - 🐛 Report bugs and issues
 - 💡 Suggest new features
 - 🔧 Submit code improvements
 - 📚 Improve documentation
-- 💬 Help other users in discussions
-
-## 💝 Community & Support
-
-AI2 is built by a global community of developers, financial professionals, and enthusiasts.
-
-### Join Our Community
-- 🛠️ **Developers** - Build with our APIs and services
-- 💼 **Businesses** - Streamline your financial operations
-- 📊 **Analysts** - Leverage powerful insights and reporting
-- 🤝 **Contributors** - Help shape the future of financial tech
-- 🌟 **Users** - Get support and share best practices
-
-### Support the Project
-
-**Free Ways:**
-- ⭐ **Star this repository** to show support
-- 💬 **Join discussions** and help other users
-- 🐛 **Report bugs** and suggest features
-- 💻 **Contribute code** to make AI2 better
-- 📖 **Improve documentation** and guides
-
-**Financial Support:**
-- 💰 **Community Funding** - Support via Open Collective
-- 💎 **Application Access** - Get the integrated experience at [ai2fin.com](https://ai2fin.com)
-- 🎁 **Sponsorship** - Become a project sponsor
-
-### Community Benefits
-We offer special access and benefits for:
-- 🎓 Students and educators (free application access)
-- 🌍 Open source projects (free application access)
-- 💚 Non-profit organizations (discounted access)
-- 🌟 Active contributors (free access + rewards)
-
-Contact hi@ai2fin.com for community benefits.
 
 ## 📞 Support
 
@@ -632,7 +640,11 @@ Contact hi@ai2fin.com for community benefits.
 
 ---
 
-**AI2 Financial Platform** - Intelligent Financial Management at Scale 🚀  
-*AI-Powered • Microservices Architecture • Community Driven*
+**AI2 Financial Platform** - Professional Financial Intelligence 🚀  
+*Commercial Software • Source-Visible • Enterprise Ready*
 
-🚀 **Get Started:** [ai2fin.com](https://ai2fin.com) | 🤝 **Support Us:** [Open Collective](https://opencollective.com/ai2fin) | 📖 **Docs:** [docs.ai2fin.com](https://docs.ai2fin.com)
+💼 **Get Licensed:** [ai2fin.com/pricing](https://ai2fin.com/pricing) | 📧 **Contact:** hi@ai2fin.com | 📊 **Status:** [status.ai2fin.com](https://status.ai2fin.com)
+
+---
+
+© 2025 AI2 Financial Platform. All rights reserved. This is proprietary commercial software.

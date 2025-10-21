@@ -1,41 +1,129 @@
-MIT License
+AI2 FINANCIAL PLATFORM - COMMERCIAL LICENSE
+Version 1.0, January 2025
 
-Copyright (c) 2025 AI2 Financial Platform Contributors
+Copyright (c) 2025 AI2 Financial Platform. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+## IMPORTANT NOTICE
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+This software is PROPRIETARY and CONFIDENTIAL. The source code is made visible for transparency and evaluation purposes only. **All usage requires a valid paid license.**
 
 ---
 
-## Scope
+## LICENSE GRANT
 
-This MIT License applies to:
-- AI intelligence and ML models (ai2-ai-modules/)
-- Analytics service (ai2-analytics/)
-- Connectors service (ai2-connectors/)
-- Notifications service (ai2-notifications/)
-- Subscription service (ai2-subscription-service/)
-- Shared utilities and libraries (shared/)
-- All APIs and microservices
+Subject to the terms of this license and payment of applicable fees, AI2 Financial Platform grants you a limited, non-exclusive, non-transferable license to use the software.
 
-## Integrated Application
+## WHAT REQUIRES A LICENSE
 
-The complete integrated application with unified interface is available separately.
-Visit https://ai2fin.com#pricing for application access.
+**ALL usage requires a paid license**, including but not limited to:
+- ❌ Running the software in any environment
+- ❌ Processing financial data
+- ❌ Using for personal or business purposes
+- ❌ Deploying to any server or cloud platform
+- ❌ Self-hosting or managed hosting
+- ❌ Using any component or service
+- ❌ API access or integration
+- ❌ Development or testing beyond evaluation period
 
-All microservices remain fully open source under MIT license.
+## EVALUATION PERIOD
+
+You may evaluate the software for up to **30 days** for assessment purposes only. After 30 days, you must:
+1. Purchase a valid license, OR
+2. Cease all use and delete all copies
+
+## NO USAGE WITHOUT LICENSE
+
+Without a valid paid license, you may ONLY:
+- ✅ View the source code for evaluation
+- ✅ Read documentation
+- ✅ Assess suitability for your needs (30 days maximum)
+
+You may NOT:
+- ❌ Run the software
+- ❌ Deploy or host it
+- ❌ Use it for any purpose
+- ❌ Modify or create derivative works
+- ❌ Copy or redistribute
+- ❌ Remove license notices
+- ❌ Reverse engineer
+
+## PURCHASING A LICENSE
+
+To use this software, you must purchase a license at:
+**https://ai2fin.com/pricing**
+
+License types available:
+- Personal License
+- Business License
+- Enterprise License
+- Developer License
+- Self-Hosted License
+
+## SOURCE CODE VISIBILITY
+
+The source code is publicly visible for:
+- Transparency and trust
+- Security auditing
+- Evaluation before purchase
+- Technical assessment
+
+**Visibility does NOT grant usage rights.** You must purchase a license to use the software.
+
+## CONTRIBUTING
+
+By submitting contributions, you:
+- Grant AI2 Financial Platform perpetual rights to use your contribution
+- Agree your contribution is subject to this commercial license
+- Do not receive equity, revenue share, or automatic license rights
+- May be eligible for contributor benefits (at our sole discretion)
+
+Contact hi@ai2fin.com to discuss contributor licensing.
+
+## RESTRICTIONS
+
+- No sublicensing or redistribution
+- No removal of copyright notices
+- No use for competing products
+- No bypassing of license validation
+- Must comply with license terms at all times
+
+## WARRANTY DISCLAIMER
+
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+## LIABILITY
+
+IN NO EVENT SHALL AI2 FINANCIAL PLATFORM BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT, OR OTHERWISE, ARISING FROM THE SOFTWARE OR USE THEREOF.
+
+## TERMINATION
+
+This license terminates automatically if you:
+- Fail to pay license fees
+- Violate any terms
+- Use without a valid license
+
+Upon termination, you must immediately cease all use and delete all copies.
+
+## ENFORCEMENT
+
+Unauthorized use will result in:
+- Immediate termination of access
+- Invoice for usage-based fees
+- Legal action for damages
+- Permanent ban from licensing
+
+## GOVERNING LAW
+
+This license is governed by applicable laws. Disputes shall be resolved through binding arbitration.
+
+---
+
+## CONTACT
+
+**Licensing:** https://ai2fin.com/pricing  
+**Sales:** hi@ai2fin.com  
+**Support:** Available to licensed users only
+
+---
+
+**TL;DR: Source is visible for transparency. Usage requires a paid license. Get yours at ai2fin.com/pricing**
