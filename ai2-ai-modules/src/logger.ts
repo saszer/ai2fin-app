@@ -1,54 +1,64 @@
+// ==========================================
+// LOGGER
+// Winston logger configuration
+// embracingearth.space
+// ==========================================
+
 import winston from 'winston';
-import path from 'path';
 
-// Create logs directory path
-const logsDir = path.join(process.cwd(), 'logs');
+const { combine, timestamp, printf, colorize, errors } = winston.format;
 
-// Create a logger instance with file transports
-const logger = winston.createLogger({
+// Custom log format
+const logFormat = printf(({ level, message, timestamp, ...metadata }) => {
+  let msg = `${timestamp} [${level}] : ${message}`;
+
+  // Add metadata if exists
+  if (Object.keys(metadata).length > 0) {
+    msg += ` ${JSON.stringify(metadata)}`;
+  }
+
+  return msg;
+});
+
+// Create logger instance
+export const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.errors({ stack: true }),
-    winston.format.json()
+  format: combine(
+    errors({ stack: true }),
+    timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    logFormat
   ),
-  defaultMeta: { service: 'ai-modules' },
   transports: [
-    // Console transport for development
+    // Console transport
     new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      )
+      format: combine(
+        colorize(),
+        timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        logFormat
+      ),
+    }),
+    // File transport for errors
+    new winston.transports.File({
+      filename: 'logs/error.log',
+      level: 'error',
+      maxsize: 5242880, // 5MB
+      maxFiles: 5,
     }),
     // File transport for all logs
     new winston.transports.File({
-      filename: path.join(logsDir, 'ai-modules-error.log'),
-      level: 'error',
-      format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json()
-      )
+      filename: 'logs/combined.log',
+      maxsize: 5242880, // 5MB
+      maxFiles: 5,
     }),
-    // File transport for all logs (combined)
-    new winston.transports.File({
-      filename: path.join(logsDir, 'ai-modules-combined.log'),
-      format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json()
-      )
-    })
   ],
+  exitOnError: false,
 });
 
-// If we're not in production, add extra console logging
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.simple()
-    )
-  }));
+// Create logs directory if it doesn't exist
+import * as fs from 'fs';
+if (!fs.existsSync('logs')) {
+  fs.mkdirSync('logs');
 }
 
+// Export default logger
 export default logger;

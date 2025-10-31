@@ -39,11 +39,18 @@ import cors from 'cors';
 import helmet from 'helmet';
 // Temporarily disable problematic imports to get basic routes working
 // import { featureFlags } from './shared-mock';  
+// Old routes (DEPRECATED - keeping for backward compatibility)
 import aiRoutes from './routes/ai-routes-working';
-import optimizedRoutes from './routes/ai-batch-optimized';
+// import optimizedRoutes from './routes/ai-batch-optimized';  // DEPRECATED
 import simpleRoutes from './routes/ai-simple';
-import logRoutes from './routes/logs';
-import taxRoutes from './routes/ai-tax';
+// import logRoutes from './routes/logs';  // File doesn't exist
+// import taxRoutes from './routes/ai-tax';  // File doesn't exist
+
+// NEW: MCP Chat System
+import chatRoutes from './routes/chat-routes';
+import { toolRegistry } from './mcp/server/ToolRegistry';
+import { allTools } from './mcp/tools';
+import { logger } from './logger';
 
 const app = express();
 const PORT = process.env.AI_PORT || 3002;
@@ -90,6 +97,14 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 };
+
+// ==========================================
+// MCP TOOL REGISTRATION
+// Register all tools on startup
+// ==========================================
+logger.info('🔧 Registering MCP tools...');
+toolRegistry.registerMany(allTools);
+logger.info(`✅ Registered ${toolRegistry.count()} MCP tools`);
 
 // Middleware
 // CF Origin Lock - ensure requests arrive via Cloudflare by validating a secret header
@@ -148,8 +163,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// 📝 API Logging Routes
-app.use('/api/logs', logRoutes);
+// 📝 API Logging Routes (DISABLED - file doesn't exist)
+// app.use('/api/logs', logRoutes);
 
 // 🏥 HEALTH CHECK ENDPOINT - Required for deployment monitoring
 app.get('/health', async (req, res) => {
@@ -193,14 +208,18 @@ app.get('/health', async (req, res) => {
 // 🧠 AI CLASSIFICATION ROUTES - CRITICAL: Mount the main AI routes  
 app.use('/', aiRoutes);
 
-// 🚀 OPTIMIZED BATCH ROUTES - Mount the missing optimized batch processing
-app.use('/api/optimized', optimizedRoutes);
+// 🚀 OPTIMIZED BATCH ROUTES (DISABLED - deprecated)
+// app.use('/api/optimized', optimizedRoutes);
 
 // 🎯 SIMPLE AI ROUTES - Mount the simple categorization routes
 app.use('/api/simple', simpleRoutes);
 
-// 💰 TAX ANALYSIS ROUTES - Mount the intelligent tax deduction routes
-app.use('/api/ai-tax', taxRoutes);
+// 💰 TAX ANALYSIS ROUTES (DISABLED - file doesn't exist)
+// app.use('/api/ai-tax', taxRoutes);
+
+// 🤖 NEW: MCP CHAT ROUTES - Mount the new AI chat system
+app.use(chatRoutes);
+logger.info('✅ MCP Chat routes mounted');
 
 // 🔥 USER-SPECIFIC ANALYZE ENDPOINT - MUST BE BEFORE OTHER ROUTES
 // This handles requests like /cmd30zpi3000kp9iwwcj0w66b/analyze
@@ -270,13 +289,13 @@ app.use('/api/ai', aiRoutes);
 import aiSimpleRoutes from './routes/ai-simple';
 app.use('/api/simple', aiSimpleRoutes);
 
-// Mount optimized batch processing routes
-// import aiOptimizedRoutes from './routes/ai-batch-optimized'; // This line is now redundant as optimizedRoutes is imported directly
-app.use('/api/optimized', optimizedRoutes);
+// Mount optimized batch processing routes (DISABLED - deprecated)
+// import aiOptimizedRoutes from './routes/ai-batch-optimized';
+// app.use('/api/optimized', optimizedRoutes);
 
-// Mount enhanced classification routes
-import aiEnhancedRoutes from './routes/ai-enhanced-classification';
-app.use('/api/ai', aiEnhancedRoutes);
+// Mount enhanced classification routes (DISABLED - file doesn't exist)
+// import aiEnhancedRoutes from './routes/ai-enhanced-classification';
+// app.use('/api/ai', aiEnhancedRoutes);
 
 // 🔧 CRITICAL FIX: Add direct /api/classify route that core app expects
 // This fixes the 404 "Cannot POST /api/classify" errors
