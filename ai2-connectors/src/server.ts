@@ -1,7 +1,13 @@
+// --- 📦 CONNECTORS SERVICE SERVER ---
+// embracingearth.space - Main server entry point for connectors service
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { authenticateToken, serviceAuth } from './middleware/auth';
+import { sanitizeInput } from './middleware/validation';
+import connectorsRouter from './routes/connectors';
+import './connectors/registerConnectors'; // Register all connectors on startup
 
 const app = express();
 const PORT = process.env.CONNECTORS_PORT || 3003;
@@ -39,7 +45,8 @@ if (ORIGIN_LOCK_ENABLED && ORIGIN_SHARED_SECRET) {
 }
 app.use(helmet());
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Limit request size for security
+app.use(sanitizeInput); // Sanitize all inputs
 
 // Health check
 app.get('/health', (req, res) => {
@@ -56,7 +63,11 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Basic connector endpoints
+// Connector API routes (matches core app expectations)
+// Routes are prefixed with /api/connectors
+app.use('/api/connectors', authenticateToken, connectorsRouter);
+
+// Legacy endpoints (for backward compatibility)
 app.get('/api/connectors/status', (req, res) => {
   res.json({
     service: 'Connectors',
@@ -68,63 +79,6 @@ app.get('/api/connectors/status', (req, res) => {
     ],
     version: '1.0.0'
   });
-});
-
-app.post('/api/connectors/bank/connect', authenticateToken, async (req, res) => {
-  try {
-    const { bankName, credentials } = req.body;
-    
-    // Mock bank connection
-    const connection = {
-      id: `bank_${Date.now()}`,
-      bankName,
-      status: 'connected',
-      lastSync: new Date().toISOString(),
-      accounts: [
-        { id: 'acc_1', name: 'Checking Account', balance: 5000.00 },
-        { id: 'acc_2', name: 'Savings Account', balance: 15000.00 }
-      ]
-    };
-
-    res.json({
-      success: true,
-      data: connection,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: 'Bank connection failed',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-app.post('/api/connectors/email/connect', async (req, res) => {
-  try {
-    const { emailProvider, credentials } = req.body;
-    
-    // Mock email connection
-    const connection = {
-      id: `email_${Date.now()}`,
-      provider: emailProvider,
-      status: 'connected',
-      lastSync: new Date().toISOString(),
-      emailsProcessed: 0
-    };
-
-    res.json({
-      success: true,
-      data: connection,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: 'Email connection failed',
-      timestamp: new Date().toISOString()
-    });
-  }
 });
 
 // Start server
