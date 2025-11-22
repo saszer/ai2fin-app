@@ -49,6 +49,7 @@ function checkConnectorAvailability(connectorId: string): boolean {
   const connectorEnvRequirements: Record<string, string[]> = {
     'basiq': ['BASIQ_API_KEY'],
     'xero': ['XERO_CLIENT_ID', 'XERO_CLIENT_SECRET'],
+    'apideck': ['APIDECK_API_KEY', 'APIDECK_APP_ID'],
     'example-bank-api': [], // Example connector, no real env vars needed
     'sms-upi-indian': [] // SMS UPI can work without env vars
   };
@@ -466,6 +467,9 @@ router.delete('/bank/connections/:id', async (req: AuthenticatedRequest, res: Re
     next(error);
   }
 });
+
+// Export Apideck routes separately (will be mounted in server.ts)
+export { default as apideckRouter } from './apideck';
 
 export default router;
 

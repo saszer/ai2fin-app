@@ -67,6 +67,17 @@ app.get('/health', (req, res) => {
 // Routes are prefixed with /api/connectors
 app.use('/api/connectors', authenticateToken, connectorsRouter);
 
+// Apideck Vault routes (OAuth flow and webhooks)
+// Note: Webhook endpoint is public (no auth) but verifies signature
+import { default as apideckRouter } from './routes/apideck';
+// Webhook endpoint should be accessible without auth (but with signature verification)
+app.post('/api/connectors/apideck/webhook', (req, res, next) => {
+  // Skip auth middleware for webhook
+  apideckRouter(req, res, next);
+});
+// Other Apideck routes require authentication
+app.use('/api/connectors/apideck', authenticateToken, apideckRouter);
+
 // Legacy endpoints (for backward compatibility)
 app.get('/api/connectors/status', (req, res) => {
   res.json({

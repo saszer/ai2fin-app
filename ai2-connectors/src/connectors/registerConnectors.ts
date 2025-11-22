@@ -7,6 +7,7 @@ import { BankAPIConnector } from './examples/BankAPIConnector';
 import { XeroConnector } from './examples/XeroConnector';
 import { SMSUPIConnector } from './examples/SMSUPIConnector';
 import { BasiqConnector } from './BasiqConnector';
+import { ApideckConnector } from './ApideckConnector';
 
 /**
  * Register all connectors
@@ -24,6 +25,11 @@ export function registerAllConnectors(): void {
   
   // Register production connectors
   connectorRegistry.register(BasiqConnector);
+  
+  // Register Apideck Unified API connector (if configured)
+  if (process.env.APIDECK_API_KEY && process.env.APIDECK_APP_ID) {
+    connectorRegistry.register(ApideckConnector);
+  }
   
   // Add your custom connectors here:
   // connectorRegistry.register(MyCustomConnector);
