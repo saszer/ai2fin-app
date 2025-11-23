@@ -36,6 +36,22 @@ interface StoredConnection {
 
 const connections: Map<string, StoredConnection> = new Map();
 
+/**
+ * Get connection by ID (exported for webhook processor)
+ * Architecture: Allows webhook processor to find connections
+ */
+export function getConnectionById(connectionId: string): StoredConnection | undefined {
+  return connections.get(connectionId);
+}
+
+/**
+ * Get connections by user ID (exported for webhook processor)
+ * Architecture: Allows webhook processor to find user connections
+ */
+export function getConnectionsByUserId(userId: string): StoredConnection[] {
+  return Array.from(connections.values()).filter(conn => conn.userId === userId);
+}
+
 // Helper to generate connection ID
 function generateConnectionId(): string {
   return `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;

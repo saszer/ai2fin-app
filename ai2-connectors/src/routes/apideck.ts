@@ -8,6 +8,7 @@ import { apideckVaultService } from '../services/ApideckVaultService';
 import { connectorRegistry } from '../core/ConnectorRegistry';
 import { credentialManager } from '../core/CredentialManager';
 import { ConnectorCredentials } from '../types/connector';
+import { webhookProcessor } from '../services/WebhookProcessor';
 
 const router = express.Router();
 
@@ -162,22 +163,66 @@ router.get('/vault/callback', async (req: AuthenticatedRequest, res: Response, n
  * Architecture: Receives real-time updates about connection status changes
  * Note: This endpoint should be publicly accessible (no auth) but verify webhook signature
  */
-router.post('/webhook', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }), async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Security: Validate request size
+    if (req.body && req.body.length > 1024 * 1024) { // 1MB limit
+      return res.status(413).json({ success: false, error: 'Payload too large' });
+    }
+
+    // Get raw body for signature verification
+    const rawBody = typeof req.body === 'string' ? req.body : req.body.toString();
+    
+    // Parse payload
+    let payload: any;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch (parseError) {
+      console.error('Invalid JSON in Apideck webhook:', parseError);
+      return res.status(400).json({ success: false, error: 'Invalid JSON payload' });
+    }
+
+    // Security: Validate payload structure
+    if (!payload || typeof payload !== 'object') {
+      return res.status(400).json({ success: false, error: 'Invalid payload format' });
+    }
+
     // Verify webhook signature if Apideck provides it
     const signature = req.headers['x-apideck-signature'] as string;
     const webhookSecret = process.env.APIDECK_WEBHOOK_SECRET || '';
+
+    // Security: Require webhook secret in production
+    if (process.env.NODE_ENV === 'production' && !webhookSecret) {
+      console.error('⚠️ APIDECK_WEBHOOK_SECRET not configured in production');
+      return res.status(500).json({ success: false, error: 'Webhook not configured' });
+    }
     
-    if (webhookSecret && signature) {
-      const payload = JSON.stringify(req.body);
-      const isValid = apideckVaultService.verifyWebhookSignature(payload, signature, webhookSecret);
+    if (webhookSecret) {
+      if (!signature) {
+        console.warn('⚠️ Missing Apideck webhook signature');
+        return res.status(401).json({ success: false, error: 'Missing webhook signature' });
+      }
+
+      const isValid = apideckVaultService.verifyWebhookSignature(rawBody, signature, webhookSecret);
       
       if (!isValid) {
+        console.warn('⚠️ Invalid Apideck webhook signature', {
+          ip: req.ip,
+          userAgent: req.headers['user-agent']
+        });
         return res.status(401).json({ success: false, error: 'Invalid webhook signature' });
       }
+    } else if (process.env.NODE_ENV === 'production') {
+      // In production, signature is required
+      return res.status(401).json({ success: false, error: 'Webhook signature required' });
     }
 
-    const { event_type, data } = req.body;
+    const { event_type, data } = payload;
+
+    // Security: Validate required fields
+    if (!event_type || !data) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
 
     // Handle different webhook event types
     switch (event_type) {
@@ -204,6 +249,35 @@ router.post('/webhook', async (req: Request, res: Response, next: NextFunction) 
         // Connection credentials are invalid
         console.log('Apideck connection invalid credentials:', data);
         // TODO: Mark connection as error, notify user
+        break;
+
+      case 'accounting.transaction.created':
+      case 'accounting.transaction.updated':
+        // Real-time transaction event
+        console.log(`📨 Apideck transaction webhook: ${event_type}`);
+        
+        try {
+          const result = await webhookProcessor.processWebhook({
+            eventType: event_type,
+            connectorId: 'apideck',
+            data: {
+              transaction: data.transaction || data,
+              account: data.account,
+              connectionId: data.connectionId || data.connection?.id
+            },
+            userId: data.consumerId || data.userId,
+            connectionId: data.connectionId || data.connection?.id,
+            timestamp: new Date().toISOString()
+          });
+
+          if (result.success && result.transaction) {
+            console.log(`✅ Processed Apideck transaction: ${result.transaction.transactionId}`);
+          } else {
+            console.warn('⚠️ Failed to process Apideck transaction webhook');
+          }
+        } catch (error: any) {
+          console.error('Error processing Apideck transaction webhook:', error);
+        }
         break;
 
       default:

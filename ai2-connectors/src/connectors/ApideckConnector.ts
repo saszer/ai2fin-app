@@ -114,7 +114,7 @@ export class ApideckConnector extends BaseConnector {
         supportsTransactions: true,
         supportsBalance: true,
         supportsWebhooks: true,
-        supportsRealtime: false,
+        supportsRealtime: true, // ✅ Real-time via webhooks
         requiresOAuth: true,
         supportsMultipleAccounts: true
       },
