@@ -41,12 +41,17 @@ router.post('/vault/session', async (req: AuthenticatedRequest, res: Response, n
       `${process.env.FRONTEND_URL || 'http://localhost:3000'}/connectors/apideck/callback`;
 
     // Create Vault session
+    // Construct user name from firstName/lastName or fallback to email
+    const userName = req.user?.firstName && req.user?.lastName
+      ? `${req.user.firstName} ${req.user.lastName}`
+      : req.user?.firstName || req.user?.email || 'User';
+    
     const session = await apideckVaultService.createSession({
       consumerId,
       redirectUri: finalRedirectUri,
       consumerMetadata: consumerMetadata || {
         account_name: req.user?.email || 'User',
-        user_name: req.user?.name || 'User'
+        user_name: userName
       },
       theme: theme || {
         vault_name: 'AI2 Financial',

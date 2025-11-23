@@ -143,13 +143,13 @@ export class ApideckConnector extends BaseConnector {
     }
 
     const url = `${this.apideckBaseUrl}${endpoint}`;
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Authorization': `Bearer ${this.apideckApiKey}`,
       'x-apideck-app-id': this.apideckAppId,
       'x-apideck-consumer-id': consumerId,
       'x-apideck-service-id': serviceId,
       'Content-Type': 'application/json',
-      ...options.headers
+      ...(options.headers as Record<string, string> || {})
     };
 
     try {
@@ -159,7 +159,7 @@ export class ApideckConnector extends BaseConnector {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' })) as { message?: string; [key: string]: any };
         
         if (response.status === 401 || response.status === 403) {
           throw new ConnectorError(

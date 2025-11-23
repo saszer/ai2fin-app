@@ -14,9 +14,6 @@
     "declarationMap": true,
     "sourceMap": true,
     "baseUrl": ".",
-    "paths": {
-      "@ai2/shared": ["../shared/src"]
-    },
     "types": ["node"]
   },
   "include": [
