@@ -1,88 +1,22 @@
-# Fly.io Configuration for AI2 Connectors Service
-# Enterprise connector microservice for banks, accounting software, and financial APIs
-# embracingearth.space
+# fly.toml app configuration file generated for ai2-connectors on 2025-11-23T23:14:13Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "ai2-connectors"
-primary_region = "syd"  # Sydney for AU compliance
+app = 'ai2-connectors'
+primary_region = 'syd'
 
 [build]
-  [build.args]
-    NODE_VERSION = "18"
 
-[env]
-  NODE_ENV = "production"
-  PORT = "3003"
-  HOST = "0.0.0.0"
-  CONNECTORS_PORT = "3003"
-
-[[services]]
-  protocol = "tcp"
-  internal_port = 3003
-  processes = ["app"]
-
-  [[services.ports]]
-    port = 80
-    handlers = ["http"]
-    force_https = true
-
-  [[services.ports]]
-    port = 443
-    handlers = ["tls", "http"]
-  
-  [services.concurrency]
-    type = "connections"
-    hard_limit = 200
-    soft_limit = 150
-
-  [[services.tcp_checks]]
-    interval = "15s"
-    timeout = "2s"
-    grace_period = "5s"
-    restart_limit = 0
-
-  [[services.http_checks]]
-    interval = "30s"
-    timeout = "5s"
-    grace_period = "30s"
-    method = "get"
-    path = "/health"
-    protocol = "http"
-    restart_limit = 0
-
-[processes]
-  app = "node dist/server.js"
-
-[[vm]]
-  cpu_kind = "shared"
-  cpus = 1
-  memory_mb = 512
-
-# Autoscaling configuration for 100k+ concurrent users
 [http_service]
   internal_port = 3003
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 1
-  processes = ["app"]
-  
-  # Smart auto-scaling: Keep alive longer when users are active
-  [http_service.auto_stop_machines_options]
-    stop_after = "30m"       # Keep running 30 minutes after last request
-  
-  [http_service.auto_start_machines_options]
-    start_timeout = "5s"     # Quick startup when users return
+  min_machines_running = 0
+  processes = ['app']
 
-  [http_service.concurrency]
-    type = "connections"
-    hard_limit = 200
-    soft_limit = 150
-
-# Health checks
-[[http_service.checks]]
-  grace_period = "30s"
-  interval = "30s"
-  method = "GET"
-  timeout = "5s"
-  path = "/health"
-
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 512
