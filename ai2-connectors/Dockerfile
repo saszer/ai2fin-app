@@ -7,10 +7,9 @@ RUN apk add --no-cache libc6-compat git
 WORKDIR /app
 
 # Install ALL dependencies (including dev dependencies for build)
-# Use npm install if package-lock.json doesn't exist, otherwise use npm ci
-COPY package.json ./
-COPY package-lock.json* ./
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+# Use npm install (works with or without package-lock.json)
+COPY package.json package-lock.json* ./
+RUN npm install
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -35,9 +34,9 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Install only production dependencies for runtime
-COPY package.json ./
-COPY package-lock.json* ./
-RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi && npm cache clean --force
+# Use npm install (works with or without package-lock.json)
+COPY package.json package-lock.json* ./
+RUN npm install --omit=dev && npm cache clean --force
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
