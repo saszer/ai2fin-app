@@ -12,28 +12,77 @@ const router = express.Router();
  * Verify Basiq webhook signature
  * Architecture: HMAC-SHA256 signature verification for security
  * Reference: https://api.basiq.io/docs/webhooks-security
+ * 
+ * Basiq uses:
+ * - Headers: webhook-id, webhook-timestamp, webhook-signature
+ * - Signed content: `${webhook_id}.${webhook_timestamp}.${payload}`
+ * - Secret format: whsec_<base64_string> (need to base64 decode the part after whsec_)
+ * - Signature format: v1,<base64_signature> (space-delimited list)
  */
 function verifyBasiqSignature(
+  webhookId: string,
+  webhookTimestamp: string,
   payload: string,
-  signature: string,
+  webhookSignature: string,
   secret: string
 ): boolean {
   try {
+    // Extract base64 part from secret (format: whsec_<base64_string>)
+    let secretBytes: Buffer;
+    if (secret.startsWith('whsec_')) {
+      const base64Part = secret.split('_')[1];
+      secretBytes = Buffer.from(base64Part, 'base64');
+    } else {
+      // Fallback: assume secret is already the base64 string
+      secretBytes = Buffer.from(secret, 'base64');
+    }
+
+    // Construct signed content: id.timestamp.payload
+    const signedContent = `${webhookId}.${webhookTimestamp}.${payload}`;
+
+    // Calculate expected signature using HMAC-SHA256
     const expectedSignature = crypto
-      .createHmac('sha256', secret)
-      .update(payload)
-      .digest('hex');
+      .createHmac('sha256', secretBytes)
+      .update(signedContent)
+      .digest('base64');
+
+    // Parse webhook-signature header (format: v1,<signature> or space-delimited list)
+    const signatures = webhookSignature.split(' ');
     
-    // Basiq sends signature in format: sha256=<hash>
-    const signatureHash = signature.replace('sha256=', '');
-    
-    // Constant-time comparison to prevent timing attacks
-    return crypto.timingSafeEqual(
-      Buffer.from(expectedSignature),
-      Buffer.from(signatureHash)
-    );
+    // Check if any signature matches
+    for (const sig of signatures) {
+      // Remove version prefix (e.g., "v1,")
+      const signatureHash = sig.includes(',') ? sig.split(',')[1] : sig;
+      
+      // Constant-time comparison to prevent timing attacks
+      if (crypto.timingSafeEqual(
+        Buffer.from(expectedSignature),
+        Buffer.from(signatureHash)
+      )) {
+        return true;
+      }
+    }
+
+    return false;
   } catch (error) {
     console.error('Signature verification error:', error);
+    return false;
+  }
+}
+
+/**
+ * Verify webhook timestamp to prevent replay attacks
+ * Basiq recommends rejecting webhooks with timestamp > 5 minutes old/future
+ */
+function verifyTimestamp(webhookTimestamp: string, toleranceSeconds: number = 300): boolean {
+  try {
+    const timestamp = parseInt(webhookTimestamp, 10);
+    const now = Math.floor(Date.now() / 1000);
+    const diff = Math.abs(now - timestamp);
+    
+    return diff <= toleranceSeconds; // 5 minutes default
+  } catch (error) {
+    console.error('Timestamp verification error:', error);
     return false;
   }
 }
@@ -53,7 +102,11 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
 
     // Get raw body for signature verification
     const rawBody = req.body.toString();
-    const signature = req.headers['x-basiq-signature'] as string;
+    
+    // Basiq webhook headers (per https://api.basiq.io/docs/webhooks-security)
+    const webhookId = req.headers['webhook-id'] as string;
+    const webhookTimestamp = req.headers['webhook-timestamp'] as string;
+    const webhookSignature = req.headers['webhook-signature'] as string;
     const webhookSecret = process.env.BASIQ_WEBHOOK_SECRET || '';
 
     // Security: Require webhook secret in production
@@ -64,17 +117,39 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
 
     // Verify webhook signature (required in production)
     if (webhookSecret) {
-      if (!signature) {
-        console.warn('⚠️ Missing Basiq webhook signature');
-        return res.status(401).json({ success: false, error: 'Missing webhook signature' });
+      // Check required headers
+      if (!webhookId || !webhookTimestamp || !webhookSignature) {
+        console.warn('⚠️ Missing Basiq webhook headers', {
+          hasId: !!webhookId,
+          hasTimestamp: !!webhookTimestamp,
+          hasSignature: !!webhookSignature
+        });
+        return res.status(401).json({ success: false, error: 'Missing webhook headers' });
       }
 
-      const isValid = verifyBasiqSignature(rawBody, signature, webhookSecret);
+      // Verify timestamp (prevent replay attacks)
+      if (!verifyTimestamp(webhookTimestamp)) {
+        console.warn('⚠️ Basiq webhook timestamp out of tolerance', {
+          timestamp: webhookTimestamp,
+          current: Math.floor(Date.now() / 1000)
+        });
+        return res.status(401).json({ success: false, error: 'Webhook timestamp invalid' });
+      }
+
+      // Verify signature
+      const isValid = verifyBasiqSignature(
+        webhookId,
+        webhookTimestamp,
+        rawBody,
+        webhookSignature,
+        webhookSecret
+      );
       
       if (!isValid) {
         console.warn('⚠️ Invalid Basiq webhook signature', {
           ip: req.ip,
-          userAgent: req.headers['user-agent']
+          userAgent: req.headers['user-agent'],
+          webhookId
         });
         return res.status(401).json({ success: false, error: 'Invalid webhook signature' });
       }
@@ -97,30 +172,36 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
       return res.status(400).json({ success: false, error: 'Invalid payload format' });
     }
 
-    const { event, data } = payload;
+    // Basiq webhook payload format (per API docs)
+    // Payload contains: eventTypeId, eventId, links, and potentially data
+    const eventTypeId = payload.eventTypeId || payload.event;
+    const eventId = payload.eventId;
+    const eventData = payload.data || payload;
 
     // Security: Validate required fields
-    if (!event || !data) {
-      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    if (!eventTypeId) {
+      return res.status(400).json({ success: false, error: 'Missing eventTypeId' });
     }
 
-    console.log(`📨 Basiq webhook received: ${event}`);
+    console.log(`📨 Basiq webhook received: ${eventTypeId} (eventId: ${eventId})`);
 
-    // Handle different webhook event types
-    switch (event) {
-      case 'transaction.created':
-      case 'transaction.updated':
-        // Process transaction webhook
+    // Handle different webhook event types (using actual Basiq event names)
+    switch (eventTypeId) {
+      case 'transactions.updated':
+        // Process transaction updates
+        // Note: Basiq sends event with links to actual transaction data
+        // You may need to fetch transaction details using the links provided
         const result = await webhookProcessor.processWebhook({
-          eventType: event,
+          eventType: eventTypeId,
           connectorId: 'basiq',
           data: {
-            transaction: data.transaction,
-            account: data.account,
-            connectionId: data.connectionId || data.connection?.id
+            transaction: eventData.transaction,
+            account: eventData.account,
+            connectionId: eventData.connectionId || eventData.connection?.id,
+            links: payload.links // Basiq provides links to fetch full data
           },
-          userId: data.userId,
-          connectionId: data.connectionId || data.connection?.id,
+          userId: eventData.userId,
+          connectionId: eventData.connectionId || eventData.connection?.id,
           timestamp: new Date().toISOString()
         });
 
@@ -132,24 +213,46 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
         break;
 
       case 'connection.created':
-      case 'connection.updated':
-        console.log('Basiq connection updated:', data);
+        console.log('Basiq connection created:', eventData);
         // TODO: Update connection status in database
+        // TODO: Fetch connection details from payload.links.eventEntity if needed
         break;
 
       case 'connection.deleted':
-        console.log('Basiq connection deleted:', data);
-        // TODO: Mark connection as disconnected
+        console.log('Basiq connection deleted:', eventData);
+        // TODO: Mark connection as disconnected in database
         break;
 
-      case 'job.completed':
-        // Job completed (e.g., account sync)
-        console.log('Basiq job completed:', data);
-        // TODO: Handle job completion
+      case 'connection.invalidated':
+      case 'connection.activated':
+        console.log(`Basiq connection ${eventTypeId}:`, eventData);
+        // TODO: Update connection status in database
+        break;
+
+      case 'account.updated':
+        console.log('Basiq account updated:', eventData);
+        // TODO: Update account information in database
+        break;
+
+      case 'user.created':
+      case 'user.updated':
+      case 'user.deleted':
+        console.log(`Basiq user ${eventTypeId}:`, eventData);
+        // TODO: Handle user events if needed
+        break;
+
+      case 'consent.created':
+      case 'consent.updated':
+      case 'consent.revoked':
+      case 'consent.reminder':
+      case 'consent.warning':
+      case 'consent.expired':
+        console.log(`Basiq consent ${eventTypeId}:`, eventData);
+        // TODO: Handle consent events if needed
         break;
 
       default:
-        console.log('Unhandled Basiq webhook event:', event, data);
+        console.log('Unhandled Basiq webhook event:', eventTypeId, eventData);
     }
 
     res.json({ success: true, message: 'Webhook received' });
