@@ -56,10 +56,28 @@ export const authenticateToken = (req: AuthenticatedRequest, res: Response, next
     
     next();
   } catch (error: any) {
-    console.error('Connector auth failed:', error.message);
+    // Enhanced error logging for debugging JWT issues
+    const errorDetails: any = {
+      message: error.message,
+      name: error.name,
+      path: req.path,
+      method: req.method
+    };
+    
+    // Log specific JWT error types for easier debugging
+    if (error.name === 'JsonWebTokenError') {
+      errorDetails.jwtError = 'Token format invalid or secret mismatch';
+    } else if (error.name === 'TokenExpiredError') {
+      errorDetails.jwtError = 'Token expired';
+    } else if (error.name === 'NotBeforeError') {
+      errorDetails.jwtError = 'Token not active yet';
+    }
+    
+    console.error('Connector auth failed:', errorDetails);
     return res.status(403).json({ 
       success: false, 
-      error: 'Invalid or expired token' 
+      error: 'Invalid or expired token',
+      details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
     });
   }
 };
