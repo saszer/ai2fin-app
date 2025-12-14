@@ -125,6 +125,20 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Diagnostic endpoint for JWT_SECRET configuration (does not expose secret value)
+app.get('/api/connectors/diagnostic/jwt-config', (req, res) => {
+  const jwtSecret = process.env.JWT_SECRET;
+  res.json({
+    jwtSecretConfigured: !!jwtSecret,
+    jwtSecretLength: jwtSecret ? jwtSecret.length : 0,
+    jwtSecretHash: jwtSecret ? require('crypto').createHash('sha256').update(jwtSecret).digest('hex').substring(0, 16) : null,
+    message: jwtSecret 
+      ? 'JWT_SECRET is configured. Compare the hash with core app to verify they match.'
+      : 'CRITICAL: JWT_SECRET is not configured!',
+    instructions: 'Run: fly secrets get JWT_SECRET -a ai2-core-api and compare with connectors service'
+  });
+});
+
 // Connector API routes (matches core app expectations)
 // Routes are prefixed with /api/connectors
 app.use('/api/connectors', authenticateToken, connectorsRouter);

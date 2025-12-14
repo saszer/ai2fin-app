@@ -61,19 +61,30 @@ export const authenticateToken = (req: AuthenticatedRequest, res: Response, next
       message: error.message,
       name: error.name,
       path: req.path,
-      method: req.method
+      method: req.method,
+      hasSecret: !!secret,
+      secretLength: secret ? secret.length : 0
     };
     
     // Log specific JWT error types for easier debugging
     if (error.name === 'JsonWebTokenError') {
       errorDetails.jwtError = 'Token format invalid or secret mismatch';
+      errorDetails.diagnosis = 'JWT_SECRET likely mismatched between services';
     } else if (error.name === 'TokenExpiredError') {
       errorDetails.jwtError = 'Token expired';
+      errorDetails.diagnosis = 'Token has expired - user needs to re-authenticate';
     } else if (error.name === 'NotBeforeError') {
       errorDetails.jwtError = 'Token not active yet';
+      errorDetails.diagnosis = 'Token is not yet valid';
+    } else if (error.message?.includes('invalid signature')) {
+      errorDetails.jwtError = 'Invalid signature - JWT_SECRET mismatch';
+      errorDetails.diagnosis = 'CRITICAL: JWT_SECRET must match between ai2-core-api and ai2-connectors';
     }
     
-    console.error('Connector auth failed:', errorDetails);
+    // Always log full error details for debugging
+    console.error('Connector auth failed:', JSON.stringify(errorDetails, null, 2));
+    console.error('Full error:', error);
+    
     return res.status(403).json({ 
       success: false, 
       error: 'Invalid or expired token',
