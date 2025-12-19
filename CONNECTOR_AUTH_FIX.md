@@ -147,3 +147,4 @@ curl -X GET https://connectors.ai2fin.com/api/connectors/providers \
 2. Restart both services
 3. Test authentication
 4. Monitor logs for success messages
+
