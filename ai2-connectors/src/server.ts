@@ -154,9 +154,22 @@ app.post('/api/connectors/apideck/webhook', express.raw({ type: 'application/jso
 // Other Apideck routes require authentication
 app.use('/api/connectors/apideck', authenticateToken, apideckRouter);
 
-// Basiq webhook routes (public endpoint with signature verification)
+// Basiq routes (OAuth consent flow + webhooks)
+// embracingearth.space - Basiq integration
 import { default as basiqRouter } from './routes/basiq';
+// Webhook endpoint is public (with signature verification)
 app.post('/api/connectors/basiq/webhook', basiqRouter);
+// Consent and OAuth endpoints require authentication
+app.use('/api/connectors/basiq', authenticateToken, basiqRouter);
+
+// Wise routes (OAuth flow + API)
+// embracingearth.space - Wise integration
+import { default as wiseRouter } from './routes/wise';
+// Webhook endpoint is public (with signature verification)
+app.post('/api/connectors/wise/webhook', wiseRouter);
+// OAuth and API endpoints require authentication (except callback which is GET)
+app.get('/api/connectors/wise/callback', wiseRouter); // OAuth callback doesn't have user token
+app.use('/api/connectors/wise', authenticateToken, wiseRouter);
 
 // Legacy endpoints (for backward compatibility)
 app.get('/api/connectors/status', (req, res) => {

@@ -1,12 +1,323 @@
-// --- 📦 BASIQ WEBHOOK ROUTES ---
-// embracingearth.space - Basiq webhook endpoints for real-time transaction updates
-// Architecture: Handles Basiq webhook events and processes transactions in real-time
+// --- 📦 BASIQ ROUTES ---
+// embracingearth.space - Basiq OAuth consent flow and webhook endpoints
+// Architecture: Handles user consent, OAuth callbacks, and real-time webhooks
+// Docs: https://api.basiq.io/docs
 
 import express, { Request, Response, NextFunction } from 'express';
+import { AuthenticatedRequest } from '../middleware/auth';
 import { webhookProcessor } from '../services/WebhookProcessor';
 import crypto from 'crypto';
 
 const router = express.Router();
+
+// --- BASIQ API CONFIGURATION ---
+const BASIQ_API_BASE = process.env.BASIQ_ENVIRONMENT === 'production' 
+  ? 'https://au-api.basiq.io'
+  : 'https://au-api.basiq.io'; // Same URL, different API key behavior
+
+/**
+ * Get Basiq access token using API key
+ * Architecture: Server-side token generation, never expose API key to client
+ */
+async function getBasiqAccessToken(): Promise<string> {
+  const apiKey = process.env.BASIQ_API_KEY;
+  if (!apiKey) {
+    throw new Error('BASIQ_API_KEY not configured');
+  }
+
+  const response = await fetch(`${BASIQ_API_BASE}/token`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${apiKey}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'basiq-version': '3.0'
+    },
+    body: 'scope=SERVER_ACCESS'
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('Basiq token error:', error);
+    throw new Error('Failed to get Basiq access token');
+  }
+
+  const data = await response.json() as { access_token: string };
+  return data.access_token;
+}
+
+/**
+ * POST /api/connectors/basiq/consent
+ * Create Basiq user and return consent UI URL for bank connection
+ * Architecture: User clicks "Connect Bank" → We create Basiq user → Return consent URL → User selects bank → OAuth flow
+ */
+router.post('/consent', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { redirectUri } = req.body;
+    if (!redirectUri) {
+      return res.status(400).json({ success: false, error: 'redirectUri is required' });
+    }
+
+    // Get access token
+    const accessToken = await getBasiqAccessToken();
+
+    // Step 1: Create or get existing Basiq user for this platform user
+    // In production, store basiqUserId in your database
+    const userEmail = req.user?.email || `user-${userId}@ai2platform.local`;
+    
+    const createUserResponse = await fetch(`${BASIQ_API_BASE}/users`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'basiq-version': '3.0'
+      },
+      body: JSON.stringify({
+        email: userEmail,
+        mobile: req.user?.phone || undefined // Optional
+      })
+    });
+
+    let basiqUserId: string;
+    
+    if (createUserResponse.ok) {
+      const userData = await createUserResponse.json() as { id: string };
+      basiqUserId = userData.id;
+      console.log(`✅ Created Basiq user: ${basiqUserId}`);
+    } else {
+      // User might already exist - that's OK for demo
+      // In production, store and lookup basiqUserId in your DB
+      const errorText = await createUserResponse.text();
+      console.warn('Basiq user creation response:', errorText);
+      
+      // Generate a deterministic user ID for demo purposes
+      basiqUserId = `demo-${crypto.createHash('md5').update(userId).digest('hex').substring(0, 12)}`;
+    }
+
+    // Step 2: Create consent link for user to connect their bank
+    // Basiq Consent UI handles bank selection and authentication
+    const consentResponse = await fetch(`${BASIQ_API_BASE}/users/${basiqUserId}/auth_link`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'basiq-version': '3.0'
+      },
+      body: JSON.stringify({
+        mobile: req.user?.phone || undefined,
+        email: userEmail,
+        // Redirect back to our app after consent
+        redirectUrl: redirectUri
+      })
+    });
+
+    if (!consentResponse.ok) {
+      const error = await consentResponse.text();
+      console.error('Basiq consent link error:', error);
+      
+      // Fallback: Use direct Basiq consent URL format
+      const consentUrl = `https://consent.basiq.io/home?userId=${basiqUserId}&token=${accessToken}&redirectUrl=${encodeURIComponent(redirectUri)}`;
+      
+      return res.json({
+        success: true,
+        consentUrl,
+        basiqUserId,
+        message: 'Consent URL generated (fallback mode)'
+      });
+    }
+
+    const consentData = await consentResponse.json() as { links?: { self?: string }; url?: string };
+    const consentUrl = consentData.url || consentData.links?.self;
+
+    if (!consentUrl) {
+      console.error('No consent URL in response:', consentData);
+      return res.status(500).json({ success: false, error: 'Failed to generate consent URL' });
+    }
+
+    console.log(`✅ Generated Basiq consent URL for user: ${userId}`);
+
+    res.json({
+      success: true,
+      consentUrl,
+      basiqUserId,
+      message: 'Redirect user to consentUrl to connect their bank'
+    });
+
+  } catch (error: any) {
+    console.error('Basiq consent error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to create consent session' 
+    });
+  }
+});
+
+/**
+ * GET /api/connectors/basiq/callback
+ * Handle callback after user completes Basiq consent flow
+ * Architecture: Basiq redirects here after bank connection → We fetch accounts → Store connection
+ */
+router.get('/callback', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { userId: basiqUserId, jobId, success: consentSuccess } = req.query;
+
+    if (!consentSuccess || consentSuccess === 'false') {
+      console.warn('Basiq consent was not completed:', req.query);
+      return res.redirect('/connectors?status=cancelled');
+    }
+
+    if (!basiqUserId) {
+      console.error('Missing basiqUserId in callback');
+      return res.redirect('/connectors?status=error&message=Missing user ID');
+    }
+
+    // Get access token
+    const accessToken = await getBasiqAccessToken();
+
+    // Fetch user's connections/accounts
+    const connectionsResponse = await fetch(`${BASIQ_API_BASE}/users/${basiqUserId}/connections`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'basiq-version': '3.0'
+      }
+    });
+
+    if (!connectionsResponse.ok) {
+      console.error('Failed to fetch Basiq connections:', await connectionsResponse.text());
+      return res.redirect('/connectors?status=error&message=Failed to fetch connections');
+    }
+
+    const connectionsData = await connectionsResponse.json() as { data?: Array<{ id: string; status: string; institution?: { shortName?: string } }> };
+    const connections = connectionsData.data || [];
+
+    console.log(`✅ Basiq callback: ${connections.length} connections for user ${basiqUserId}`);
+
+    // TODO: Store connection in database
+    // For now, redirect to success page
+    res.redirect(`/connectors?status=success&provider=basiq&accounts=${connections.length}`);
+
+  } catch (error: any) {
+    console.error('Basiq callback error:', error);
+    res.redirect('/connectors?status=error&message=Callback processing failed');
+  }
+});
+
+/**
+ * GET /api/connectors/basiq/accounts
+ * Fetch accounts for connected Basiq user
+ */
+router.get('/accounts', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { basiqUserId } = req.query;
+    if (!basiqUserId) {
+      return res.status(400).json({ success: false, error: 'basiqUserId is required' });
+    }
+
+    const accessToken = await getBasiqAccessToken();
+
+    const response = await fetch(`${BASIQ_API_BASE}/users/${basiqUserId}/accounts`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'basiq-version': '3.0'
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Failed to fetch Basiq accounts:', error);
+      return res.status(500).json({ success: false, error: 'Failed to fetch accounts' });
+    }
+
+    const data = await response.json() as { data?: any[] };
+    const accounts = (data.data || []).map((acc: any) => ({
+      id: acc.id,
+      name: acc.name || acc.accountNumber,
+      type: acc.class?.toLowerCase() || 'account',
+      balance: acc.balance?.available || acc.balance?.current || 0,
+      currency: acc.currency || 'AUD',
+      institution: acc.institution?.shortName || 'Bank',
+      accountNumber: acc.accountNumber ? `****${acc.accountNumber.slice(-4)}` : undefined
+    }));
+
+    res.json({ success: true, accounts });
+
+  } catch (error: any) {
+    console.error('Basiq accounts error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch accounts' });
+  }
+});
+
+/**
+ * GET /api/connectors/basiq/transactions
+ * Fetch transactions for a Basiq account
+ */
+router.get('/transactions', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { basiqUserId, accountId, fromDate, toDate, limit = '100' } = req.query;
+    
+    if (!basiqUserId) {
+      return res.status(400).json({ success: false, error: 'basiqUserId is required' });
+    }
+
+    const accessToken = await getBasiqAccessToken();
+
+    // Build query params
+    const params = new URLSearchParams();
+    if (accountId) params.append('filter[account.id]', accountId as string);
+    if (fromDate) params.append('filter[transaction.postDate][gte]', fromDate as string);
+    if (toDate) params.append('filter[transaction.postDate][lte]', toDate as string);
+    params.append('limit', limit as string);
+
+    const response = await fetch(
+      `${BASIQ_API_BASE}/users/${basiqUserId}/transactions?${params.toString()}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'basiq-version': '3.0'
+        }
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('Failed to fetch Basiq transactions:', error);
+      return res.status(500).json({ success: false, error: 'Failed to fetch transactions' });
+    }
+
+    const data = await response.json() as { data?: any[] };
+    const transactions = (data.data || []).map((tx: any) => ({
+      id: tx.id,
+      date: tx.postDate || tx.transactionDate,
+      description: tx.description,
+      amount: parseFloat(tx.amount || '0'),
+      type: tx.direction?.toLowerCase() === 'credit' ? 'credit' : 'debit',
+      category: tx.enrich?.category?.anzsic?.division?.title || tx.subClass?.title,
+      merchant: tx.enrich?.merchant?.businessName,
+      balance: tx.balance,
+      accountId: tx.account?.id
+    }));
+
+    res.json({ success: true, transactions, count: transactions.length });
+
+  } catch (error: any) {
+    console.error('Basiq transactions error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch transactions' });
+  }
+});
 
 /**
  * Verify Basiq webhook signature

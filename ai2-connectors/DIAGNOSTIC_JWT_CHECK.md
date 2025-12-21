@@ -78,3 +78,5 @@ headers['x-service-token'] = process.env.SERVICE_SECRET;
 
 But JWT is better for user authentication, so matching JWT_SECRET is the correct solution.
 
+
+

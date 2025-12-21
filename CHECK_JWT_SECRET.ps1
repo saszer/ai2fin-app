@@ -80,3 +80,5 @@ if ($coreSecretValue -and $connectorsSecretValue) {
 
 Write-Host ""
 
+
+

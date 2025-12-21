@@ -8,32 +8,44 @@ import { XeroConnector } from './examples/XeroConnector';
 import { SMSUPIConnector } from './examples/SMSUPIConnector';
 import { BasiqConnector } from './BasiqConnector';
 import { ApideckConnector } from './ApideckConnector';
+import { WiseConnector } from './WiseConnector';
 
 /**
  * Register all connectors
  * 
  * Architecture Notes:
  * - All connectors must be registered before use
- * - Add your custom connectors here
- * - Connectors can be loaded dynamically in future (plugin system)
+ * - Connectors are only available if their env vars are configured
+ * - embracingearth.space - Production connector registry
  */
 export function registerAllConnectors(): void {
-  // Register example connectors
-  connectorRegistry.register(BankAPIConnector);
-  connectorRegistry.register(XeroConnector);
-  connectorRegistry.register(SMSUPIConnector);
+  // Register production connectors (conditionally based on env vars)
   
-  // Register production connectors
-  connectorRegistry.register(BasiqConnector);
-  
-  // Register Apideck Unified API connector (if configured)
-  if (process.env.APIDECK_API_KEY && process.env.APIDECK_APP_ID) {
-    connectorRegistry.register(ApideckConnector);
+  // Basiq - Australian bank aggregation
+  if (process.env.BASIQ_API_KEY) {
+    connectorRegistry.register(BasiqConnector);
+    console.log('  ✓ Basiq connector registered');
   }
   
-  // Add your custom connectors here:
-  // connectorRegistry.register(MyCustomConnector);
-  // connectorRegistry.register(AnotherConnector);
+  // Wise - Multi-currency payments
+  if (process.env.WISE_CLIENT_ID && process.env.WISE_CLIENT_SECRET) {
+    connectorRegistry.register(WiseConnector);
+    console.log('  ✓ Wise connector registered');
+  }
+  
+  // Apideck - Unified accounting API (QuickBooks, Xero, etc.)
+  if (process.env.APIDECK_API_KEY && process.env.APIDECK_APP_ID) {
+    connectorRegistry.register(ApideckConnector);
+    console.log('  ✓ Apideck connector registered');
+  }
+  
+  // Register example connectors for development/demo
+  if (process.env.NODE_ENV !== 'production') {
+    connectorRegistry.register(BankAPIConnector);
+    connectorRegistry.register(XeroConnector);
+    connectorRegistry.register(SMSUPIConnector);
+    console.log('  ✓ Example connectors registered (dev mode)');
+  }
   
   console.log(`✅ Registered ${connectorRegistry.listConnectorIds().length} connector(s)`);
 }
