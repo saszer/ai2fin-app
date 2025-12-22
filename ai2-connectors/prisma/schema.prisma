@@ -1,0 +1,156 @@
+// --- 📦 AI2 CONNECTORS - PRISMA SCHEMA ---
+// embracingearth.space - Secure credential storage with encryption at rest
+// All credentials stored AES-256-GCM encrypted before DB write
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// CONNECTOR CONNECTIONS - User bank/API connections
+// ============================================================================
+model ConnectorConnection {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  connectorId     String   @map("connector_id") // e.g., 'plaid', 'basiq', 'wise'
+  connectorType   String   @map("connector_type") // 'bank', 'accounting', etc.
+  
+  // Connection state
+  status          String   @default("disconnected") // disconnected, connected, syncing, error, expired
+  institutionId   String?  @map("institution_id") // Bank/institution ID
+  institutionName String?  @map("institution_name") // Display name
+  
+  // Encrypted credentials (AES-256-GCM) - NEVER store plaintext
+  // Format: iv:authTag:encryptedData (hex encoded)
+  encryptedCredentials String? @map("encrypted_credentials") @db.Text
+  
+  // Accounts linked to this connection (JSON array)
+  accounts        String?  @db.Text // JSON: ConnectorAccount[]
+  
+  // Sync metadata
+  lastSync        DateTime? @map("last_sync")
+  lastError       String?   @map("last_error") @db.Text
+  syncCount       Int       @default(0) @map("sync_count")
+  
+  // User settings (JSON)
+  settings        String?   @db.Text // JSON: ConnectorSettings
+  
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  expiresAt       DateTime? @map("expires_at") // Token expiration if applicable
+  
+  // Audit trail
+  auditLogs       ConnectorAuditLog[]
+  
+  @@unique([userId, connectorId, institutionId])
+  @@index([userId])
+  @@index([connectorId])
+  @@index([status])
+  @@map("connector_connections")
+}
+
+// ============================================================================
+// AUDIT LOG - Complete audit trail for compliance
+// ============================================================================
+model ConnectorAuditLog {
+  id            String   @id @default(cuid())
+  connectionId  String?  @map("connection_id")
+  connection    ConnectorConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  
+  userId        String   @map("user_id")
+  action        String   // connect, disconnect, sync, token_refresh, error, credential_access
+  status        String   // success, failure, pending
+  
+  // Request context (sanitized - no secrets)
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent") @db.Text
+  
+  // Details (sanitized JSON - no credentials)
+  details       String?  @db.Text // JSON with action-specific details
+  errorMessage  String?  @map("error_message") @db.Text
+  
+  // Timing
+  durationMs    Int?     @map("duration_ms")
+  timestamp     DateTime @default(now())
+  
+  @@index([userId])
+  @@index([connectionId])
+  @@index([action])
+  @@index([timestamp])
+  @@map("connector_audit_logs")
+}
+
+// ============================================================================
+// WEBHOOK EVENTS - Track webhook deliveries for debugging
+// ============================================================================
+model ConnectorWebhookEvent {
+  id            String   @id @default(cuid())
+  connectionId  String?  @map("connection_id")
+  connectorId   String   @map("connector_id")
+  
+  // Event details
+  eventType     String   @map("event_type")
+  eventId       String?  @map("event_id") // External event ID
+  
+  // Payload (sanitized - no secrets)
+  payload       String?  @db.Text // JSON
+  
+  // Processing status
+  status        String   @default("received") // received, processing, processed, failed
+  processedAt   DateTime? @map("processed_at")
+  errorMessage  String?  @map("error_message") @db.Text
+  retryCount    Int      @default(0) @map("retry_count")
+  
+  // Timestamps
+  receivedAt    DateTime @default(now()) @map("received_at")
+  
+  @@index([connectionId])
+  @@index([connectorId])
+  @@index([eventType])
+  @@index([status])
+  @@map("connector_webhook_events")
+}
+
+// ============================================================================
+// SYNC HISTORY - Track sync operations for analytics
+// ============================================================================
+model ConnectorSyncHistory {
+  id            String   @id @default(cuid())
+  connectionId  String   @map("connection_id")
+  userId        String   @map("user_id")
+  
+  // Sync details
+  syncType      String   @map("sync_type") // manual, scheduled, webhook
+  status        String   // success, partial, failed
+  
+  // Stats
+  totalTransactions     Int @default(0) @map("total_transactions")
+  newTransactions       Int @default(0) @map("new_transactions")
+  skippedTransactions   Int @default(0) @map("skipped_transactions")
+  
+  // Date range synced
+  syncStartDate DateTime? @map("sync_start_date")
+  syncEndDate   DateTime? @map("sync_end_date")
+  
+  // Timing
+  startedAt     DateTime  @default(now()) @map("started_at")
+  completedAt   DateTime? @map("completed_at")
+  durationMs    Int?      @map("duration_ms")
+  
+  // Error details
+  errorMessage  String?   @map("error_message") @db.Text
+  
+  @@index([connectionId])
+  @@index([userId])
+  @@index([status])
+  @@index([startedAt])
+  @@map("connector_sync_history")
+}
+

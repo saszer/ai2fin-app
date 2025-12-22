@@ -1,5 +1,6 @@
 // --- 📦 CONNECTORS SERVICE SERVER ---
 // embracingearth.space - Main server entry point for connectors service
+// SECURITY: All credentials stored encrypted (AES-256-GCM), full audit logging
 
 // Load environment variables FIRST - before any other imports
 import 'dotenv/config';
@@ -14,6 +15,9 @@ import { sanitizeInput } from './middleware/validation';
 import connectorsRouter from './routes/connectors';
 import { realtimeTransactionService } from './services/RealtimeTransactionService';
 import './connectors/registerConnectors'; // Register all connectors on startup
+
+// Initialize Prisma for secure credential storage
+import { prisma } from './lib/prisma';
 
 const app = express();
 const httpServer = createServer(app);
@@ -40,6 +44,31 @@ const ORIGIN_SHARED_SECRET = process.env.ORIGIN_SHARED_SECRET || '';
 if (!process.env.JWT_SECRET) {
   console.error('CRITICAL: JWT_SECRET not configured for connectors service');
   process.exit(1);
+}
+
+// Credential encryption validation
+if (!process.env.CREDENTIAL_ENCRYPTION_KEY) {
+  console.warn('⚠️ CREDENTIAL_ENCRYPTION_KEY not set - credentials will use fallback encryption (dev only)');
+  if (process.env.NODE_ENV === 'production') {
+    console.error('CRITICAL: CREDENTIAL_ENCRYPTION_KEY required in production');
+    process.exit(1);
+  }
+} else if (process.env.CREDENTIAL_ENCRYPTION_KEY.length < 32) {
+  console.error('CRITICAL: CREDENTIAL_ENCRYPTION_KEY must be at least 32 characters');
+  process.exit(1);
+} else {
+  console.log('✅ Credential encryption key configured');
+}
+
+// Database validation
+if (!process.env.DATABASE_URL) {
+  console.warn('⚠️ DATABASE_URL not set - secure credential storage unavailable');
+  if (process.env.NODE_ENV === 'production') {
+    console.error('CRITICAL: DATABASE_URL required in production for secure credential storage');
+    process.exit(1);
+  }
+} else {
+  console.log('✅ Database configured for secure credential storage');
 }
 
 // Middleware
@@ -174,6 +203,14 @@ app.post('/api/connectors/wise/webhook', wiseRouter);
 app.get('/api/connectors/wise/callback', wiseRouter); // OAuth callback doesn't have user token
 app.use('/api/connectors/wise', authenticateToken, wiseRouter);
 
+// Plaid routes (Link flow + API)
+// embracingearth.space - Plaid integration for US/UK/Canada/EU banks
+import { default as plaidRouter } from './routes/plaid';
+// Webhook endpoint is public
+app.post('/api/connectors/plaid/webhook', plaidRouter);
+// Link token and exchange endpoints require authentication
+app.use('/api/connectors/plaid', authenticateToken, plaidRouter);
+
 // Legacy endpoints (for backward compatibility)
 app.get('/api/connectors/status', (req, res) => {
   res.json({
@@ -190,13 +227,32 @@ app.get('/api/connectors/status', (req, res) => {
 
 // Start server
 if (require.main === module) {
-  httpServer.listen(PORT, () => {
-    console.log(`🔌 Connectors Service running on port ${PORT}`);
-    console.log(`📊 Bank Feed: ${process.env.ENABLE_BANK_FEED === 'true' ? 'Enabled' : 'Disabled'}`);
-    console.log(`📧 Email Connector: ${process.env.ENABLE_EMAIL_CONNECTOR === 'true' ? 'Enabled' : 'Disabled'}`);
-    console.log(`⚡ WebSocket Server: Enabled (Socket.io)`);
-    console.log(`🔔 Real-time Transactions: Enabled`);
-  });
+  // Test database connection on startup
+  prisma.$connect()
+    .then(() => {
+      console.log('✅ Database connected - secure credential storage ready');
+      
+      httpServer.listen(PORT, () => {
+        console.log(`🔌 Connectors Service running on port ${PORT}`);
+        console.log(`🔐 Secure Credential Storage: ${process.env.DATABASE_URL ? 'Enabled (AES-256-GCM)' : 'Disabled'}`);
+        console.log(`📊 Bank Feed: ${process.env.ENABLE_BANK_FEED === 'true' ? 'Enabled' : 'Disabled'}`);
+        console.log(`📧 Email Connector: ${process.env.ENABLE_EMAIL_CONNECTOR === 'true' ? 'Enabled' : 'Disabled'}`);
+        console.log(`⚡ WebSocket Server: Enabled (Socket.io)`);
+        console.log(`🔔 Real-time Transactions: Enabled`);
+        console.log(`📋 Audit Logging: Enabled`);
+      });
+    })
+    .catch((err: Error) => {
+      console.error('❌ Database connection failed:', err.message);
+      if (process.env.NODE_ENV === 'production') {
+        process.exit(1);
+      }
+      // In development, start without DB (limited functionality)
+      console.warn('⚠️ Starting without database - secure credential storage unavailable');
+      httpServer.listen(PORT, () => {
+        console.log(`🔌 Connectors Service running on port ${PORT} (limited mode)`);
+      });
+    });
 }
 
 export { httpServer, io };

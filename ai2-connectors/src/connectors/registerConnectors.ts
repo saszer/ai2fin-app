@@ -9,6 +9,7 @@ import { SMSUPIConnector } from './examples/SMSUPIConnector';
 import { BasiqConnector } from './BasiqConnector';
 import { ApideckConnector } from './ApideckConnector';
 import { WiseConnector } from './WiseConnector';
+import { PlaidConnector } from './PlaidConnector';
 
 /**
  * Register all connectors
@@ -37,6 +38,13 @@ export function registerAllConnectors(): void {
   if (process.env.APIDECK_API_KEY && process.env.APIDECK_APP_ID) {
     connectorRegistry.register(ApideckConnector);
     console.log('  ✓ Apideck connector registered');
+  }
+  
+  // Plaid - US/UK/Canada/EU bank aggregation
+  // embracingearth.space - 12,000+ banks worldwide
+  if (process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET) {
+    connectorRegistry.register(PlaidConnector);
+    console.log('  ✓ Plaid connector registered');
   }
   
   // Register example connectors for development/demo

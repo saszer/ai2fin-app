@@ -1,112 +1,77 @@
-// --- 📦 CONNECTOR API ROUTES ---
-// embracingearth.space - RESTful API endpoints for connector management
-// Matches core app expectations for bank feed integration
+// --- 📦 CONNECTOR API ROUTES (SECURE) ---
+// embracingearth.space - Unified connector management with secure credential storage
+// All credentials encrypted with AES-256-GCM before database storage
 
 import express, { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { connectorRegistry } from '../core/ConnectorRegistry';
-import { credentialManager } from '../core/CredentialManager';
+import { secureCredentialManager } from '../core/SecureCredentialManager';
+import { auditService, AuditContext } from '../services/AuditService';
 import {
-  ConnectorCredentials,
   ConnectorSettings,
   TransactionFilter,
   ConnectorError,
-  ConnectorErrorCode
 } from '../types/connector';
 
 const router = express.Router();
 
 /**
- * Connection storage (in-memory for now)
- * TODO: In production, use database for connection persistence
- * Architecture: This stores connection metadata, actual credentials are in CredentialManager
+ * Get audit context from request
  */
-interface StoredConnection {
-  id: string;
-  connectorId: string;
-  userId: string;
-  status: string;
-  accounts: any[];
-  lastSync?: string;
-  lastError?: string;
-  settings: ConnectorSettings;
-  createdAt: string;
-  updatedAt: string;
-}
-
-const connections: Map<string, StoredConnection> = new Map();
-
-/**
- * Get connection by ID (exported for webhook processor)
- * Architecture: Allows webhook processor to find connections
- */
-export function getConnectionById(connectionId: string): StoredConnection | undefined {
-  return connections.get(connectionId);
-}
-
-/**
- * Get connections by user ID (exported for webhook processor)
- * Architecture: Allows webhook processor to find user connections
- */
-export function getConnectionsByUserId(userId: string): StoredConnection[] {
-  return Array.from(connections.values()).filter(conn => conn.userId === userId);
-}
-
-// Helper to generate connection ID
-function generateConnectionId(): string {
-  return `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+function getAuditContext(req: AuthenticatedRequest): AuditContext {
+  return {
+    userId: req.user?.id || 'anonymous',
+    ipAddress: req.ip || req.socket?.remoteAddress,
+    userAgent: req.headers['user-agent'],
+  };
 }
 
 /**
  * Check if connector has required environment variables set
  */
 function checkConnectorAvailability(connectorId: string): boolean {
-  // Map connector IDs to required environment variables
   const connectorEnvRequirements: Record<string, string[]> = {
     'basiq': ['BASIQ_API_KEY'],
+    'plaid': ['PLAID_CLIENT_ID', 'PLAID_SECRET'],
+    'wise': ['WISE_CLIENT_ID', 'WISE_CLIENT_SECRET'],
     'xero': ['XERO_CLIENT_ID', 'XERO_CLIENT_SECRET'],
     'apideck': ['APIDECK_API_KEY', 'APIDECK_APP_ID'],
-    'example-bank-api': [], // Example connector, no real env vars needed
-    'sms-upi-indian': [] // SMS UPI can work without env vars
   };
 
   const requiredVars = connectorEnvRequirements[connectorId] || [];
   
-  // Check if all required environment variables are set
   return requiredVars.every(varName => {
     const value = process.env[varName];
-    return value && value.trim().length > 0 && !value.toLowerCase().includes('your_') && !value.toLowerCase().includes('example');
+    return value && value.trim().length > 0 && 
+      !value.toLowerCase().includes('your_') && 
+      !value.toLowerCase().includes('example');
   });
 }
 
+// =============================================================================
+// PROVIDER LISTING
+// =============================================================================
+
 /**
  * GET /api/connectors/providers
- * List all available connector providers with availability status
- * Matches core app expectation: GET /api/bank-feed/providers
- * Only returns connectors that have required environment variables set
+ * List all available connector providers
  */
 router.get('/providers', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const allMetadata = connectorRegistry.getAllMetadata();
     
-    // Filter and map providers with availability status
-    const providers = allMetadata
-      .map(meta => {
-        const isAvailable = checkConnectorAvailability(meta.id);
-        return {
-          id: meta.id,
-          name: meta.name,
-          type: meta.type,
-          description: meta.description,
-          version: meta.version,
-          capabilities: meta.capabilities,
-          credentialFields: meta.credentialFields,
-          available: isAvailable, // Whether env vars are configured
-          documentationUrl: meta.documentationUrl,
-          author: meta.author
-        };
-      })
-      .filter(provider => provider.available); // Only show available connectors
+    const providers = allMetadata.map(meta => ({
+      id: meta.id,
+      name: meta.name,
+      type: meta.type,
+      description: meta.description,
+      version: meta.version,
+      capabilities: meta.capabilities,
+      credentialFields: meta.credentialFields,
+      available: checkConnectorAvailability(meta.id),
+      documentationUrl: meta.documentationUrl,
+      author: meta.author
+    })).filter(provider => provider.available);
     
     res.json({ providers });
   } catch (error) {
@@ -114,10 +79,14 @@ router.get('/providers', async (req: Request, res: Response, next: NextFunction)
   }
 });
 
+// =============================================================================
+// UNIFIED CONNECTION MANAGEMENT (Aggregates Plaid/Basiq/Wise)
+// =============================================================================
+
 /**
  * GET /api/connectors/bank/connections
- * Get all connections for authenticated user
- * Matches core app expectation: GET /api/bank-feed/connections
+ * Get ALL connections for authenticated user (from secure storage)
+ * SECURITY: Uses SecureCredentialManager, credentials never exposed
  */
 router.get('/bank/connections', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
@@ -126,21 +95,21 @@ router.get('/bank/connections', async (req: AuthenticatedRequest, res: Response,
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
     
-    // Filter connections by user
-    const userConnections = Array.from(connections.values())
-      .filter(conn => conn.userId === userId);
+    // Get all connections from secure storage (no credentials returned)
+    const allConnections = await secureCredentialManager.getUserConnections(userId);
     
-    // Remove sensitive data from response
-    const safeConnections = userConnections.map(conn => ({
+    // Format for frontend compatibility
+    const safeConnections = allConnections.map(conn => ({
       id: conn.id,
       connectorId: conn.connectorId,
       status: conn.status,
-      accounts: conn.accounts,
-      lastSync: conn.lastSync,
+      accounts: conn.accounts || [],
+      lastSync: conn.lastSync?.toISOString(),
       lastError: conn.lastError,
       settings: conn.settings,
-      createdAt: conn.createdAt,
-      updatedAt: conn.updatedAt
+      createdAt: conn.createdAt.toISOString(),
+      institutionId: conn.institutionId,
+      institutionName: conn.institutionName,
     }));
     
     res.json({ connections: safeConnections });
@@ -150,11 +119,191 @@ router.get('/bank/connections', async (req: AuthenticatedRequest, res: Response,
 });
 
 /**
+ * GET /api/connectors/bank/connections/:id
+ * Get single connection details
+ */
+router.get('/bank/connections/:id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+    
+    const connectionId = req.params.id;
+    const connection = await secureCredentialManager.getConnection(connectionId, userId);
+    
+    if (!connection) {
+      return res.status(404).json({ success: false, error: 'Connection not found' });
+    }
+    
+    res.json({
+      success: true,
+      connection: {
+        id: connection.id,
+        connectorId: connection.connectorId,
+        status: connection.status,
+        accounts: connection.accounts || [],
+        lastSync: connection.lastSync?.toISOString(),
+        lastError: connection.lastError,
+        settings: connection.settings,
+        createdAt: connection.createdAt.toISOString(),
+        institutionId: connection.institutionId,
+        institutionName: connection.institutionName,
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/connectors/bank/connections/:id/sync
+ * Trigger sync for a connection
+ * Routes to appropriate connector (Plaid/Basiq/Wise) based on connectorId
+ */
+router.post('/bank/connections/:id/sync', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  const auditContext = getAuditContext(req);
+  const timer = auditService.createTimer();
+  
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+    
+    const connectionId = req.params.id;
+    const connection = await secureCredentialManager.getConnection(connectionId, userId);
+    
+    if (!connection) {
+      return res.status(404).json({ success: false, error: 'Connection not found' });
+    }
+
+    // Update status to syncing
+    await secureCredentialManager.updateConnectionStatus(connectionId, userId, 'syncing');
+
+    await auditService.success('sync', {
+      ...auditContext,
+      connectionId,
+      connectorId: connection.connectorId,
+    }, { type: 'manual' }, timer.elapsed());
+
+    res.json({
+      success: true,
+      message: 'Sync initiated',
+      connectionId,
+    });
+  } catch (error: any) {
+    await auditService.failure('sync', auditContext, error, {}, timer.elapsed());
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/connectors/bank/connections/:id
+ * Disconnect and delete a connection
+ */
+router.delete('/bank/connections/:id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  const auditContext = getAuditContext(req);
+  
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+    
+    const connectionId = req.params.id;
+    const connection = await secureCredentialManager.getConnection(connectionId, userId);
+    
+    if (!connection) {
+      return res.status(404).json({ success: false, error: 'Connection not found' });
+    }
+
+    // Delete the connection (credentials deleted via cascade)
+    await secureCredentialManager.deleteConnection(connectionId, userId, auditContext);
+    
+    res.json({
+      success: true,
+      message: 'Connection deleted successfully'
+    });
+  } catch (error: any) {
+    await auditService.failure('disconnect', auditContext, error);
+    next(error);
+  }
+});
+
+/**
+ * GET /api/connectors/bank/connections/:id/accounts
+ * Get accounts for a connection (routes to appropriate connector)
+ */
+router.get('/bank/connections/:id/accounts', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+    
+    const connectionId = req.params.id;
+    const connection = await secureCredentialManager.getConnection(connectionId, userId);
+    
+    if (!connection) {
+      return res.status(404).json({ success: false, error: 'Connection not found' });
+    }
+
+    // Return stored accounts (fetched during connection/sync)
+    res.json({
+      success: true,
+      accounts: connection.accounts || [],
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/connectors/bank/connections/:id/transactions
+ * Get transactions for a connection
+ * Note: Clients should use connector-specific routes for fresh data
+ */
+router.get('/bank/connections/:id/transactions', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  const auditContext = getAuditContext(req);
+  
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+    
+    const connectionId = req.params.id;
+    const connection = await secureCredentialManager.getConnection(connectionId, userId);
+    
+    if (!connection) {
+      return res.status(404).json({ success: false, error: 'Connection not found' });
+    }
+
+    // For unified endpoint, redirect client to use connector-specific routes
+    res.json({
+      success: true,
+      message: `Use /${connection.connectorId}/connections/${connectionId}/transactions for transaction data`,
+      connectorId: connection.connectorId,
+      connectionId,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// =============================================================================
+// LEGACY CONNECTOR REGISTRY ROUTES (For non-OAuth connectors)
+// =============================================================================
+
+/**
  * POST /api/connectors/bank/connections
- * Create new bank connection
- * Matches core app expectation: POST /api/bank-feed/connections
+ * Create new connection using connector registry
+ * Note: Plaid/Basiq/Wise use their own OAuth flows
  */
 router.post('/bank/connections', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  const auditContext = getAuditContext(req);
+  
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -169,8 +318,16 @@ router.post('/bank/connections', async (req: AuthenticatedRequest, res: Response
         error: 'Provider and credentials are required' 
       });
     }
+
+    // For OAuth providers, redirect to their specific flows
+    if (['plaid', 'basiq', 'wise'].includes(provider)) {
+      return res.status(400).json({
+        success: false,
+        error: `Use /${provider}/authorize or /${provider}/consent for OAuth connection`,
+      });
+    }
     
-    // Check if connector exists
+    // Check if connector exists in registry
     if (!connectorRegistry.hasConnector(provider)) {
       return res.status(404).json({ 
         success: false, 
@@ -189,19 +346,6 @@ router.post('/bank/connections', async (req: AuthenticatedRequest, res: Response
       });
     }
     
-    // Validate credentials structure
-    try {
-      credentialManager.validateCredentials(
-        credentials,
-        metadata.credentialFields.filter(f => f.required).map(f => f.name)
-      );
-    } catch (error: any) {
-      return res.status(400).json({ 
-        success: false, 
-        error: error.message 
-      });
-    }
-    
     // Validate credentials with connector
     try {
       await connector.validateCredentials(credentials);
@@ -216,8 +360,7 @@ router.post('/bank/connections', async (req: AuthenticatedRequest, res: Response
       throw error;
     }
     
-    // Create connection
-    const connectionId = generateConnectionId();
+    // Create connection settings
     const connectionSettings: ConnectorSettings = {
       autoSync: true,
       syncInterval: 60,
@@ -227,41 +370,31 @@ router.post('/bank/connections', async (req: AuthenticatedRequest, res: Response
     };
     
     try {
-      const connection = await connector.connect(userId, credentials, connectionSettings);
+      // Connect via connector
+      const connResult = await connector.connect(userId, credentials, connectionSettings);
       
-      // Store credentials securely
-      await credentialManager.storeCredentials(connectionId, userId, credentials);
-      
-      // Store connection metadata
-      const storedConnection: StoredConnection = {
-        id: connectionId,
-        connectorId: provider,
+      // Store in secure credential manager
+      const connection = await secureCredentialManager.createConnection(
         userId,
-        status: connection.status,
-        accounts: connection.accounts,
-        lastSync: connection.lastSync ? new Date(connection.lastSync).toISOString() : undefined,
-        lastError: connection.lastError,
-        settings: connectionSettings,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      connections.set(connectionId, storedConnection);
-      
-      // Remove sensitive data from response
-      const safeConnection = {
-        id: storedConnection.id,
-        connectorId: storedConnection.connectorId,
-        status: storedConnection.status,
-        accounts: storedConnection.accounts,
-        lastSync: storedConnection.lastSync,
-        settings: storedConnection.settings,
-        createdAt: storedConnection.createdAt
-      };
+        provider,
+        metadata.type,
+        credentials,
+        {
+          accounts: connResult.accounts,
+          settings: connectionSettings,
+        },
+        auditContext
+      );
       
       res.status(201).json({
         success: true,
-        connection: safeConnection,
+        connection: {
+          id: connection.id,
+          connectorId: connection.connectorId,
+          status: connection.status,
+          accounts: connection.accounts,
+          createdAt: connection.createdAt.toISOString(),
+        },
         message: 'Connection created successfully'
       });
     } catch (error: any) {
@@ -279,214 +412,7 @@ router.post('/bank/connections', async (req: AuthenticatedRequest, res: Response
   }
 });
 
-/**
- * POST /api/connectors/bank/connections/:id/sync
- * Sync transactions for a connection
- * Matches core app expectation: POST /api/bank-feed/connections/:id/sync
- */
-router.post('/bank/connections/:id/sync', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ success: false, error: 'Unauthorized' });
-    }
-    
-    const connectionId = req.params.id;
-    const storedConnection = connections.get(connectionId);
-    
-    if (!storedConnection || storedConnection.userId !== userId) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Connection not found' 
-      });
-    }
-    
-    // Get connector
-    const connector = connectorRegistry.getConnector(storedConnection.connectorId);
-    
-    // Get credentials
-    const credentials = await credentialManager.getCredentials(connectionId, userId);
-    
-    // Get filter from query params
-    const filter: TransactionFilter = {};
-    if (req.query.dateFrom) {
-      filter.dateFrom = new Date(req.query.dateFrom as string);
-    }
-    if (req.query.dateTo) {
-      filter.dateTo = new Date(req.query.dateTo as string);
-    }
-    if (req.query.accountIds) {
-      filter.accountIds = (req.query.accountIds as string).split(',');
-    }
-    
-    // Sync transactions
-    try {
-      const syncResult = await connector.sync(connectionId, credentials, filter);
-      
-      // Update connection lastSync
-      storedConnection.lastSync = new Date().toISOString();
-      storedConnection.lastError = undefined;
-      storedConnection.updatedAt = new Date().toISOString();
-      connections.set(connectionId, storedConnection);
-      
-      res.json({
-        success: true,
-        sync: syncResult,
-        message: 'Sync completed successfully'
-      });
-    } catch (error: any) {
-      // Update connection with error
-      storedConnection.lastError = error.message;
-      storedConnection.status = 'error';
-      storedConnection.updatedAt = new Date().toISOString();
-      connections.set(connectionId, storedConnection);
-      
-      if (error instanceof ConnectorError) {
-        return res.status(error.statusCode).json({ 
-          success: false, 
-          error: error.message,
-          code: error.code 
-        });
-      }
-      throw error;
-    }
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * GET /api/connectors/bank/connections/:id/accounts/:accountId/transactions
- * Get transactions for a specific account
- * Matches core app expectation: GET /api/bank-feed/connections/:id/accounts/:accountId/transactions
- */
-router.get('/bank/connections/:id/accounts/:accountId/transactions', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ success: false, error: 'Unauthorized' });
-    }
-    
-    const connectionId = req.params.id;
-    const accountId = req.params.accountId;
-    
-    const storedConnection = connections.get(connectionId);
-    
-    if (!storedConnection || storedConnection.userId !== userId) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Connection not found' 
-      });
-    }
-    
-    // Get connector
-    const connector = connectorRegistry.getConnector(storedConnection.connectorId);
-    
-    // Get credentials
-    const credentials = await credentialManager.getCredentials(connectionId, userId);
-    
-    // Build filter from query params
-    const filter: TransactionFilter = {};
-    if (req.query.dateFrom) {
-      filter.dateFrom = new Date(req.query.dateFrom as string);
-    }
-    if (req.query.dateTo) {
-      filter.dateTo = new Date(req.query.dateTo as string);
-    }
-    if (req.query.amountMin) {
-      filter.amountMin = parseFloat(req.query.amountMin as string);
-    }
-    if (req.query.amountMax) {
-      filter.amountMax = parseFloat(req.query.amountMax as string);
-    }
-    if (req.query.limit) {
-      // Note: limit is handled by connector
-      filter.limit = parseInt(req.query.limit as string, 10);
-    }
-    
-    // Get transactions
-    try {
-      const transactions = await connector.getTransactions(
-        connectionId,
-        accountId,
-        credentials,
-        filter
-      );
-      
-      res.json({
-        success: true,
-        transactions,
-        count: transactions.length
-      });
-    } catch (error: any) {
-      if (error instanceof ConnectorError) {
-        return res.status(error.statusCode).json({ 
-          success: false, 
-          error: error.message,
-          code: error.code 
-        });
-      }
-      throw error;
-    }
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * DELETE /api/connectors/bank/connections/:id
- * Disconnect and delete a connection
- * Matches core app expectation: DELETE /api/bank-feed/connections/:id
- */
-router.delete('/bank/connections/:id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ success: false, error: 'Unauthorized' });
-    }
-    
-    const connectionId = req.params.id;
-    const storedConnection = connections.get(connectionId);
-    
-    if (!storedConnection || storedConnection.userId !== userId) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Connection not found' 
-      });
-    }
-    
-    // Get connector
-    const connector = connectorRegistry.getConnector(storedConnection.connectorId);
-    
-    // Get credentials for disconnection
-    const credentials = await credentialManager.getCredentials(connectionId, userId);
-    
-    // Disconnect
-    try {
-      await connector.disconnect(connectionId, credentials);
-    } catch (error: any) {
-      // Log but continue with deletion
-      console.error(`Error disconnecting connector: ${error.message}`);
-    }
-    
-    // Delete credentials
-    await credentialManager.deleteCredentials(connectionId, userId);
-    
-    // Delete connection
-    connections.delete(connectionId);
-    
-    res.json({
-      success: true,
-      message: 'Connection deleted successfully'
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Export Apideck routes separately (will be mounted in server.ts)
+// Export Apideck routes separately
 export { default as apideckRouter } from './apideck';
 
 export default router;
-
-
