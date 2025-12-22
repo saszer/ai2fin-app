@@ -6,6 +6,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { secureCredentialManager } from '../core/SecureCredentialManager';
 import { auditService, AuditContext } from '../services/AuditService';
+import { transactionEnrichmentService } from '../services/TransactionEnrichmentService';
 import crypto from 'crypto';
 
 const router = express.Router();
@@ -468,18 +469,13 @@ router.get('/connections/:connectionId/transactions', async (req: AuthenticatedR
     }
 
     const data = await response.json() as { data?: any[] };
-    const transactions = (data.data || []).map((tx: any) => ({
-      transactionId: tx.id,
-      accountId: tx.account?.id,
-      date: tx.postDate || tx.transactionDate,
-      description: tx.description,
-      amount: parseFloat(tx.amount || '0'),
-      type: tx.direction?.toLowerCase() === 'credit' ? 'income' : 'expense',
-      category: tx.enrich?.category?.anzsic?.division?.title || tx.subClass?.title,
-      merchant: tx.enrich?.merchant?.businessName,
-      balance: tx.balance,
-      currency: 'AUD',
-    }));
+    // Map transactions using enrichment service for consistent schema
+    // Basiq has its own enrichment data (enrich.merchant, enrich.category)
+    const transactions = (data.data || []).map((tx: any) => 
+      transactionEnrichmentService.mapBasiqTransaction(tx)
+    );
+    
+    console.log(`✅ Mapped ${transactions.length} Basiq transactions with enrichment data`);
 
     await secureCredentialManager.recordSync(connectionId, userId, {
       totalTransactions: transactions.length,

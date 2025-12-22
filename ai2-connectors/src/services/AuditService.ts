@@ -17,6 +17,7 @@ export type AuditAction =
   | 'account_list'
   | 'transaction_fetch'
   | 'webhook_receive'
+  | 'enrich'
   | 'error'
   | 'security_alert';
 

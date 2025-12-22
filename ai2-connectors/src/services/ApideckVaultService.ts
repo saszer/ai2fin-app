@@ -3,6 +3,8 @@
 // Handles OAuth flow, session creation, and connection management via Apideck Vault
 // Architecture: Centralized service for managing Apideck Vault OAuth flows
 
+import crypto from 'crypto';
+
 /**
  * Apideck Vault Service
  * 
@@ -220,17 +222,41 @@ export class ApideckVaultService {
   }
 
   /**
-   * Verify webhook signature (if Apideck provides webhook signing)
-   * Architecture: Validates webhook authenticity for security
+   * Verify webhook signature
+   * Architecture: Apideck webhook verification (HMAC-SHA256 if configured)
+   * Reference: Check Apideck dashboard for webhook signing configuration
    */
   verifyWebhookSignature(
     payload: string,
     signature: string,
     secret: string
   ): boolean {
-    // Apideck may provide webhook signing - implement if available
-    // For now, return true (implement proper signature verification in production)
-    return true;
+    // If no secret configured, skip verification (not recommended for production)
+    if (!secret || secret === 'your_webhook_secret') {
+      if (process.env.NODE_ENV === 'production') {
+        console.warn('⚠️ APIDECK_WEBHOOK_SECRET not configured - webhook verification disabled');
+        return false; // Block in production if not configured
+      }
+      return true; // Allow in dev
+    }
+
+    try {
+      // Apideck typically uses HMAC-SHA256 for webhook signatures
+      // Format: signature header contains HMAC-SHA256 hash
+      const expectedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(payload)
+        .digest('hex');
+
+      // Timing-safe comparison to prevent timing attacks
+      return crypto.timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(expectedSignature)
+      );
+    } catch (error) {
+      console.error('Apideck webhook signature verification error:', error);
+      return false;
+    }
   }
 }
 

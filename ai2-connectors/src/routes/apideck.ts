@@ -6,7 +6,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { apideckVaultService } from '../services/ApideckVaultService';
 import { connectorRegistry } from '../core/ConnectorRegistry';
-import { credentialManager } from '../core/CredentialManager';
+import { secureCredentialManager } from '../core/SecureCredentialManager';
 import { ConnectorCredentials } from '../types/connector';
 import { webhookProcessor } from '../services/WebhookProcessor';
 
@@ -144,8 +144,18 @@ router.get('/vault/callback', async (req: AuthenticatedRequest, res: Response, n
         syncInterval: 60
       });
 
-      // Store credentials securely
-      await credentialManager.storeCredentials(connectorConnection.id, userId, credentials);
+      // Store credentials securely using SecureCredentialManager
+      await secureCredentialManager.createConnection(
+        userId,
+        connectorConnection.connectorId || 'apideck',
+        connectorConnection.connectorType || 'accounting',
+        credentials,
+        {
+          accounts: connectorConnection.accounts || [],
+          settings: { autoSync: true, syncInterval: 60 },
+        },
+        { userId, connectorId: 'apideck' }
+      );
 
       // Redirect to frontend success page
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -235,25 +245,91 @@ router.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }),
       case 'vault.connection.updated':
         // Connection was created or updated
         console.log('Apideck connection updated:', data);
-        // TODO: Update connection status in database
+        if (data.connection_id && data.consumer_id) {
+          try {
+            // Find connection by Apideck connection ID
+            const connections = await secureCredentialManager.getUserConnections(data.consumer_id);
+            const connection = connections.find(c => 
+              c.metadata && (c.metadata as any).apideckConnectionId === data.connection_id
+            );
+            if (connection) {
+              await secureCredentialManager.updateConnectionStatus(
+                connection.id,
+                data.consumer_id,
+                'connected'
+              );
+            }
+          } catch (err) {
+            console.error('Failed to update Apideck connection status:', err);
+          }
+        }
         break;
 
       case 'vault.connection.deleted':
         // Connection was deleted
         console.log('Apideck connection deleted:', data);
-        // TODO: Mark connection as disconnected in database
+        if (data.connection_id && data.consumer_id) {
+          try {
+            const connections = await secureCredentialManager.getUserConnections(data.consumer_id);
+            const connection = connections.find(c => 
+              c.metadata && (c.metadata as any).apideckConnectionId === data.connection_id
+            );
+            if (connection) {
+              await secureCredentialManager.deleteConnection(
+                connection.id,
+                data.consumer_id,
+                { userId: data.consumer_id, connectorId: 'apideck' }
+              );
+            }
+          } catch (err) {
+            console.error('Failed to delete Apideck connection:', err);
+          }
+        }
         break;
 
       case 'vault.connection.callable':
         // Connection is now callable (ready to use)
         console.log('Apideck connection is callable:', data);
-        // TODO: Update connection status to 'connected'
+        if (data.connection_id && data.consumer_id) {
+          try {
+            const connections = await secureCredentialManager.getUserConnections(data.consumer_id);
+            const connection = connections.find(c => 
+              c.metadata && (c.metadata as any).apideckConnectionId === data.connection_id
+            );
+            if (connection) {
+              await secureCredentialManager.updateConnectionStatus(
+                connection.id,
+                data.consumer_id,
+                'connected'
+              );
+            }
+          } catch (err) {
+            console.error('Failed to update Apideck connection status:', err);
+          }
+        }
         break;
 
       case 'vault.connection.invalid_credentials':
         // Connection credentials are invalid
         console.log('Apideck connection invalid credentials:', data);
-        // TODO: Mark connection as error, notify user
+        if (data.connection_id && data.consumer_id) {
+          try {
+            const connections = await secureCredentialManager.getUserConnections(data.consumer_id);
+            const connection = connections.find(c => 
+              c.metadata && (c.metadata as any).apideckConnectionId === data.connection_id
+            );
+            if (connection) {
+              await secureCredentialManager.updateConnectionStatus(
+                connection.id,
+                data.consumer_id,
+                'error',
+                'Invalid credentials - reconnect required'
+              );
+            }
+          } catch (err) {
+            console.error('Failed to update Apideck connection error status:', err);
+          }
+        }
         break;
 
       case 'accounting.transaction.created':
@@ -347,8 +423,12 @@ router.delete('/connections/:connectionId', async (req: AuthenticatedRequest, re
 
     await apideckVaultService.deleteConnection(userId, connectionId);
 
-    // Also delete from credential manager
-    await credentialManager.deleteCredentials(connectionId, userId);
+    // Delete from secure credential manager
+    await secureCredentialManager.deleteConnection(
+      connectionId,
+      userId,
+      { userId, connectorId: 'apideck' }
+    );
 
     res.json({
       success: true,

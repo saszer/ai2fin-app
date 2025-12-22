@@ -6,6 +6,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { secureCredentialManager } from '../core/SecureCredentialManager';
 import { auditService, AuditContext } from '../services/AuditService';
+import { transactionEnrichmentService, RawTransaction } from '../services/TransactionEnrichmentService';
 import crypto from 'crypto';
 
 const router = express.Router();
@@ -432,17 +433,29 @@ router.get('/connections/:connectionId/transactions', async (req: AuthenticatedR
     }
 
     const data = await response.json() as { transactions?: any[] };
-    const transactions = (data.transactions || []).map((tx: any) => ({
-      transactionId: tx.referenceNumber || tx.id,
-      accountId: balanceId,
-      date: tx.date,
-      amount: tx.amount?.value || 0,
-      currency: tx.amount?.currency || 'USD',
-      description: tx.details?.description || tx.type,
-      type: tx.type === 'CREDIT' ? 'income' : 'expense',
-      category: tx.type,
-      merchant: tx.details?.paymentReference,
-    }));
+    // Map transactions using enrichment service for consistent schema
+    let transactions = (data.transactions || []).map((tx: any) => 
+      transactionEnrichmentService.mapWiseTransaction(tx, balanceId as string)
+    );
+    
+    // Wise doesn't have enrichment - optionally enrich via Plaid Enrich API
+    const { enrich } = req.query;
+    if (enrich === 'true' && transactionEnrichmentService.isEnrichAvailable()) {
+      console.log('🔮 Enriching Wise transactions via Plaid Enrich API...');
+      
+      const rawTx: RawTransaction[] = transactions.map(tx => ({
+        id: tx.transactionId,
+        description: tx.description,
+        amount: tx.amount,
+        date: tx.date,
+        currency: tx.currency,
+      }));
+      
+      const enriched = await transactionEnrichmentService.enrichTransactions(rawTx, userId);
+      transactions = enriched.map(etx => ({ ...etx, source: 'wise' as const }));
+    }
+    
+    console.log(`✅ Mapped ${transactions.length} Wise transactions`);
 
     await secureCredentialManager.recordSync(connectionId, userId, {
       totalTransactions: transactions.length,

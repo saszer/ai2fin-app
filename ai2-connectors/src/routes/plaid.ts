@@ -7,45 +7,197 @@ import crypto from 'crypto';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { secureCredentialManager } from '../core/SecureCredentialManager';
 import { auditService, AuditContext } from '../services/AuditService';
+import { transactionEnrichmentService } from '../services/TransactionEnrichmentService';
 
 const router = express.Router();
 
-// --- WEBHOOK SIGNATURE VERIFICATION ---
-const PLAID_WEBHOOK_SECRET = process.env.PLAID_WEBHOOK_SECRET;
+// --- PLAID WEBHOOK VERIFICATION (OFFICIAL IMPLEMENTATION) ---
+// Reference: https://plaid.com/docs/api/webhooks/webhook-verification/
+// Plaid webhooks use JWT signed with JWK public keys
+
+// Cache for Plaid's JWK public keys (key_id -> key)
+const jwkCache: Map<string, { key: crypto.KeyObject; expiresAt: number }> = new Map();
+const JWK_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
- * Verify Plaid webhook signature (JWT-based)
- * Plaid uses JWT for webhook verification
+ * Decode JWT without verification (to extract header)
  */
-async function verifyPlaidWebhook(req: Request): Promise<boolean> {
-  if (!PLAID_WEBHOOK_SECRET) {
-    console.warn('⚠️ PLAID_WEBHOOK_SECRET not configured - webhook verification disabled');
-    return true; // Allow in dev, block in prod below
-  }
-  
+function decodeJwtHeader(token: string): { alg: string; typ: string; kid: string } | null {
   try {
-    const plaidVerification = req.headers['plaid-verification'] as string;
-    if (!plaidVerification) {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const header = JSON.parse(Buffer.from(parts[0], 'base64url').toString());
+    return header;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Decode JWT payload without verification
+ */
+function decodeJwtPayload(token: string): { iat: number; request_body_sha256: string } | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch Plaid's JWK public key for webhook verification
+ * Uses /webhook_verification_key/get endpoint
+ */
+async function getPlaidJwk(keyId: string): Promise<crypto.KeyObject | null> {
+  // Check cache first
+  const cached = jwkCache.get(keyId);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.key;
+  }
+
+  const clientId = process.env.PLAID_CLIENT_ID;
+  const secret = process.env.PLAID_SECRET;
+  
+  if (!clientId || !secret) {
+    console.error('❌ PLAID_CLIENT_ID/PLAID_SECRET required for webhook verification');
+    return null;
+  }
+
+  const PLAID_ENV = process.env.PLAID_ENV || 'sandbox';
+  const PLAID_BASE_URL = PLAID_ENV === 'production' 
+    ? 'https://production.plaid.com'
+    : PLAID_ENV === 'development'
+      ? 'https://development.plaid.com'
+      : 'https://sandbox.plaid.com';
+
+  try {
+    const response = await fetch(`${PLAID_BASE_URL}/webhook_verification_key/get`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: clientId,
+        secret: secret,
+        key_id: keyId,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('❌ Failed to fetch Plaid JWK:', await response.text());
+      return null;
+    }
+
+    const data = await response.json() as { key: { alg: string; crv: string; kid: string; kty: string; use: string; x: string; y: string } };
+    
+    // Convert JWK to KeyObject
+    const jwk = data.key;
+    const keyObject = crypto.createPublicKey({
+      key: jwk,
+      format: 'jwk',
+    });
+
+    // Cache the key
+    jwkCache.set(keyId, {
+      key: keyObject,
+      expiresAt: Date.now() + JWK_CACHE_TTL,
+    });
+
+    console.log(`✅ Fetched and cached Plaid JWK: ${keyId}`);
+    return keyObject;
+  } catch (error) {
+    console.error('❌ Error fetching Plaid JWK:', error);
+    return null;
+  }
+}
+
+/**
+ * Verify Plaid webhook signature using official JWT verification
+ * Reference: https://plaid.com/docs/api/webhooks/webhook-verification/
+ * 
+ * Steps:
+ * 1. Extract JWT from Plaid-Verification header
+ * 2. Decode JWT header to get key_id (kid)
+ * 3. Fetch public key from Plaid API
+ * 4. Verify JWT signature
+ * 5. Verify request_body_sha256 matches actual body
+ * 6. Verify timestamp is within 5 minutes
+ */
+async function verifyPlaidWebhook(req: Request, rawBody: string): Promise<boolean> {
+  try {
+    const jwt = req.headers['plaid-verification'] as string;
+    if (!jwt) {
       console.warn('⚠️ Missing Plaid-Verification header');
       return false;
     }
-    
-    // Plaid webhook verification uses JWT - simplified check here
-    // In production, use Plaid's official verification endpoint
-    // https://plaid.com/docs/api/webhooks/webhook-verification/
-    
-    // For now, verify the webhook came from expected source
-    const body = JSON.stringify(req.body);
-    const expectedSignature = crypto
-      .createHmac('sha256', PLAID_WEBHOOK_SECRET)
-      .update(body)
+
+    // Step 1: Decode JWT header to get key_id
+    const header = decodeJwtHeader(jwt);
+    if (!header || !header.kid) {
+      console.warn('⚠️ Invalid JWT header or missing kid');
+      return false;
+    }
+
+    // Step 2: Fetch public key from Plaid
+    const publicKey = await getPlaidJwk(header.kid);
+    if (!publicKey) {
+      console.error('❌ Could not fetch Plaid public key');
+      return false;
+    }
+
+    // Step 3: Verify JWT signature
+    const parts = jwt.split('.');
+    if (parts.length !== 3) {
+      console.warn('⚠️ Invalid JWT format');
+      return false;
+    }
+
+    const signatureInput = `${parts[0]}.${parts[1]}`;
+    const signature = Buffer.from(parts[2], 'base64url');
+
+    const isValidSignature = crypto.verify(
+      'sha256',
+      Buffer.from(signatureInput),
+      publicKey,
+      signature
+    );
+
+    if (!isValidSignature) {
+      console.warn('⚠️ Invalid JWT signature');
+      return false;
+    }
+
+    // Step 4: Decode payload and verify claims
+    const payload = decodeJwtPayload(jwt);
+    if (!payload) {
+      console.warn('⚠️ Invalid JWT payload');
+      return false;
+    }
+
+    // Step 5: Verify request body hash
+    const bodyHash = crypto
+      .createHash('sha256')
+      .update(rawBody)
       .digest('hex');
-    
-    // If Plaid sends a verification JWT, we'd decode and verify it
-    // This is a simplified check - full implementation would verify JWT
-    return true; // Plaid uses JWT, not HMAC - this is placeholder
+
+    if (payload.request_body_sha256 !== bodyHash) {
+      console.warn('⚠️ Request body hash mismatch');
+      return false;
+    }
+
+    // Step 6: Verify timestamp (within 5 minutes)
+    const now = Math.floor(Date.now() / 1000);
+    const fiveMinutes = 5 * 60;
+    if (Math.abs(now - payload.iat) > fiveMinutes) {
+      console.warn('⚠️ JWT timestamp too old or in future');
+      return false;
+    }
+
+    console.log('✅ Plaid webhook signature verified');
+    return true;
   } catch (error) {
-    console.error('Webhook verification error:', error);
+    console.error('❌ Webhook verification error:', error);
     return false;
   }
 }
@@ -485,19 +637,13 @@ router.get('/connections/:connectionId/transactions', async (req: AuthenticatedR
       });
     }
 
-    const transactions = (data.transactions || []).map((tx: any) => ({
-      transactionId: tx.transaction_id,
-      accountId: tx.account_id,
-      date: tx.date,
-      amount: tx.amount * -1, // Plaid uses positive for debits
-      currency: tx.iso_currency_code || 'USD',
-      description: tx.name,
-      originalDescription: tx.original_description,
-      merchant: tx.merchant_name,
-      category: tx.category?.join(' > '),
-      pending: tx.pending,
-      type: tx.amount > 0 ? 'expense' : 'income',
-    }));
+    // Map transactions using enrichment service for consistent schema
+    // Plaid transactions already include enrichment data (merchant, category, location)
+    const transactions = (data.transactions || []).map((tx: any) => 
+      transactionEnrichmentService.mapPlaidTransaction(tx)
+    );
+    
+    console.log(`✅ Mapped ${transactions.length} Plaid transactions with enrichment data`);
 
     // Record sync
     await secureCredentialManager.recordSync(connectionId, userId, {
@@ -628,18 +774,123 @@ router.delete('/connections/:connectionId', async (req: AuthenticatedRequest, re
 // WEBHOOKS (signature verified)
 // =============================================================================
 
+// =============================================================================
+// ENRICH API (For external transactions - CSV, manual, etc.)
+// =============================================================================
+
+/**
+ * POST /api/connectors/plaid/enrich
+ * Enrich transactions from ANY source using Plaid Enrich API
+ * Use this for CSV imports, manual transactions, non-Plaid connectors
+ * 
+ * Request body:
+ * {
+ *   "transactions": [
+ *     { "id": "tx1", "description": "AMZN MKTP US*123", "amount": -45.99, "date": "2024-01-15" },
+ *     ...
+ *   ]
+ * }
+ */
+router.post('/enrich', async (req: AuthenticatedRequest, res: Response) => {
+  const auditContext = getAuditContext(req);
+  const timer = auditService.createTimer();
+  
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { transactions } = req.body;
+    
+    if (!Array.isArray(transactions) || transactions.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'transactions array is required' 
+      });
+    }
+
+    if (transactions.length > 100) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Maximum 100 transactions per request (Plaid API limit)' 
+      });
+    }
+
+    // Validate transaction structure
+    for (const tx of transactions) {
+      if (!tx.id || !tx.description || tx.amount === undefined || !tx.date) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Each transaction requires: id, description, amount, date' 
+        });
+      }
+    }
+
+    if (!transactionEnrichmentService.isEnrichAvailable()) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Plaid Enrich not configured' 
+      });
+    }
+
+    console.log(`🔮 Enriching ${transactions.length} external transactions for user ${userId}`);
+
+    const enriched = await transactionEnrichmentService.enrichTransactions(
+      transactions,
+      userId
+    );
+
+    const enrichedCount = enriched.filter(t => t.enriched).length;
+    
+    await auditService.success('enrich', {
+      ...auditContext,
+      connectorId: 'plaid-enrich',
+    }, {
+      inputCount: transactions.length,
+      enrichedCount,
+    }, timer.elapsed());
+
+    res.json({
+      success: true,
+      transactions: enriched,
+      enrichedCount,
+      totalCount: transactions.length,
+    });
+
+  } catch (error: any) {
+    console.error('Enrich error:', error);
+    await auditService.failure('enrich', auditContext, error, {}, timer.elapsed());
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// =============================================================================
+// WEBHOOKS (signature verified)
+// =============================================================================
+
 /**
  * POST /api/connectors/plaid/webhook
  * Handle Plaid webhooks (item updates, transactions, errors)
  * SECURITY: Webhook signature must be verified
  */
-router.post('/webhook', async (req: Request, res: Response) => {
+router.post('/webhook', express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
   const timer = auditService.createTimer();
   
   try {
-    // Verify webhook signature in production
-    if (process.env.NODE_ENV === 'production') {
-      const isValid = await verifyPlaidWebhook(req);
+    // Get raw body for signature verification
+    const rawBody = req.body.toString();
+    let payload: any;
+    
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return res.status(400).json({ error: 'Invalid JSON' });
+    }
+
+    // Verify webhook signature (always in production, optional in dev)
+    if (process.env.NODE_ENV === 'production' || process.env.VERIFY_PLAID_WEBHOOKS === 'true') {
+      const isValid = await verifyPlaidWebhook(req, rawBody);
       if (!isValid) {
         console.warn('🚨 Invalid Plaid webhook signature');
         await auditService.securityAlert({
@@ -654,7 +905,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
       }
     }
 
-    const { webhook_type, webhook_code, item_id, error } = req.body;
+    const { webhook_type, webhook_code, item_id, error } = payload;
     
     console.log('📥 Plaid webhook received:', { webhook_type, webhook_code, item_id });
 

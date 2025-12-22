@@ -5,7 +5,7 @@
 
 import { StandardTransaction, ConnectorError, ConnectorErrorCode } from '../types/connector';
 import { connectorRegistry } from '../core/ConnectorRegistry';
-import { credentialManager } from '../core/CredentialManager';
+import { secureCredentialManager } from '../core/SecureCredentialManager';
 import { realtimeTransactionService } from './RealtimeTransactionService';
 import { createStandardTransaction } from '../utils/transactionNormalizer';
 import { getCoreAppClient } from './CoreAppClient';
@@ -309,28 +309,22 @@ export class WebhookProcessor {
 
   /**
    * Find connection by ID or userId
-   * Architecture: Retrieves connection from storage (currently in-memory, should be DB in production)
+   * Architecture: Uses SecureCredentialManager for database-backed connection storage
    * Security: Validates connection ownership to prevent userId spoofing
    */
   private async findConnection(connectionId?: string, userId?: string): Promise<any> {
-    // Import connections storage from routes (temporary until DB integration)
-    // In production, this should query the database
     try {
-      const connectorsModule = await import('../routes/connectors');
-      const { getConnectionById, getConnectionsByUserId } = connectorsModule as any;
-      
       // SECURITY: Always prefer connectionId (most reliable, from webhook signature)
-      if (connectionId && typeof getConnectionById === 'function') {
-        const conn = getConnectionById(connectionId);
-        if (conn) {
-          // CRITICAL: Validate userId matches if provided (prevents spoofing)
-          if (userId && conn.userId !== userId) {
+      if (connectionId && userId) {
+        const connection = await secureCredentialManager.getConnection(connectionId, userId);
+        if (connection) {
+          // CRITICAL: Validate userId matches (prevents spoofing)
+          if (connection.userId !== userId) {
             const errorMsg = 'UserId mismatch in webhook - security violation';
             console.error('⚠️ SECURITY: UserId mismatch in webhook', {
               connectionId,
               webhookUserId: userId,
-              connectionUserId: conn.userId,
-              ip: 'unknown' // Would need to pass req object
+              connectionUserId: connection.userId,
             });
             
             // Send Slack alert for security violation
@@ -340,20 +334,20 @@ export class WebhookProcessor {
               metadata: {
                 connectionId,
                 webhookUserId: userId,
-                connectionUserId: conn.userId
+                connectionUserId: connection.userId
               }
             }).catch(() => {}); // Don't block on notification failure
 
             return null; // Reject - security violation
           }
-          return conn;
+          return connection;
         }
       }
       
       // SECURITY: Only use userId lookup if connectionId not provided
       // But this is less secure - prefer connectionId in webhooks
-      if (userId && !connectionId && typeof getConnectionsByUserId === 'function') {
-        const userConnections = getConnectionsByUserId(userId);
+      if (userId && !connectionId) {
+        const userConnections = await secureCredentialManager.getUserConnections(userId);
         // Return first connection matching connectorId if available
         // In production, should match by connectorId from webhook
         if (userConnections.length > 0) {
