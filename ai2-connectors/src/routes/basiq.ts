@@ -18,12 +18,20 @@ const BASIQ_API_BASE = process.env.BASIQ_ENVIRONMENT === 'production'
 /**
  * Get Basiq access token using API key
  * Architecture: Server-side token generation, never expose API key to client
+ * embracingearth.space - Enhanced logging for debugging
  */
 async function getBasiqAccessToken(): Promise<string> {
   const apiKey = process.env.BASIQ_API_KEY;
   if (!apiKey) {
+    console.error('❌ BASIQ_API_KEY not configured');
     throw new Error('BASIQ_API_KEY not configured');
   }
+
+  console.log('🔑 Requesting Basiq access token...', {
+    apiKeyLength: apiKey.length,
+    apiKeyPrefix: apiKey.substring(0, 10) + '...',
+    endpoint: `${BASIQ_API_BASE}/token`
+  });
 
   const response = await fetch(`${BASIQ_API_BASE}/token`, {
     method: 'POST',
@@ -35,14 +43,28 @@ async function getBasiqAccessToken(): Promise<string> {
     body: 'scope=SERVER_ACCESS'
   });
 
+  const responseText = await response.text();
+  
   if (!response.ok) {
-    const error = await response.text();
-    console.error('Basiq token error:', error);
-    throw new Error('Failed to get Basiq access token');
+    console.error('❌ Basiq token error:', {
+      status: response.status,
+      statusText: response.statusText,
+      body: responseText
+    });
+    throw new Error(`Failed to get Basiq access token: ${response.status}`);
   }
 
-  const data = await response.json() as { access_token: string };
-  return data.access_token;
+  try {
+    const data = JSON.parse(responseText) as { access_token: string; expires_in?: number };
+    console.log('✅ Basiq token obtained', { 
+      tokenLength: data.access_token?.length,
+      expiresIn: data.expires_in 
+    });
+    return data.access_token;
+  } catch (e) {
+    console.error('❌ Failed to parse Basiq token response:', responseText);
+    throw new Error('Invalid Basiq token response');
+  }
 }
 
 /**
@@ -53,22 +75,46 @@ async function getBasiqAccessToken(): Promise<string> {
 router.post('/consent', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id;
+    console.log('🏦 Basiq consent request started', { 
+      userId, 
+      userEmail: req.user?.email,
+      redirectUri: req.body?.redirectUri 
+    });
+    
     if (!userId) {
+      console.error('❌ No userId in request');
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
 
     const { redirectUri } = req.body;
     if (!redirectUri) {
+      console.error('❌ No redirectUri provided');
       return res.status(400).json({ success: false, error: 'redirectUri is required' });
     }
 
     // Get access token
+    console.log('🔑 Getting Basiq access token...');
     const accessToken = await getBasiqAccessToken();
+    console.log('✅ Got access token, length:', accessToken.length);
 
     // Step 1: Create or get existing Basiq user for this platform user
     // In production, store basiqUserId in your database
     const userEmail = req.user?.email || `user-${userId}@ai2platform.local`;
     
+    // Basiq REQUIRES mobile number for auth_link creation
+    // embracingearth.space - No placeholders, require actual mobile from frontend
+    const userMobile = req.body.mobile || req.user?.phone;
+    
+    if (!userMobile) {
+      console.error('❌ No mobile number provided for Basiq connection');
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Mobile number required',
+        details: 'Basiq requires a valid mobile number for bank connection verification'
+      });
+    }
+    
+    console.log('👤 Creating Basiq user...', { email: userEmail, mobile: userMobile });
     const createUserResponse = await fetch(`${BASIQ_API_BASE}/users`, {
       method: 'POST',
       headers: {
@@ -78,8 +124,13 @@ router.post('/consent', async (req: AuthenticatedRequest, res: Response, next: N
       },
       body: JSON.stringify({
         email: userEmail,
-        mobile: req.user?.phone || undefined // Optional
+        mobile: userMobile // REQUIRED for auth_link
       })
+    });
+    
+    console.log('👤 User creation response:', { 
+      status: createUserResponse.status, 
+      ok: createUserResponse.ok 
     });
 
     let basiqUserId: string;
@@ -130,6 +181,16 @@ router.post('/consent', async (req: AuthenticatedRequest, res: Response, next: N
 
     // Step 2: Create consent link for user to connect their bank
     // Basiq Consent UI handles bank selection and authentication
+    console.log('🔗 Creating auth_link for basiqUserId:', basiqUserId);
+    
+    const authLinkBody = {
+      mobile: userMobile, // REQUIRED by Basiq
+      email: userEmail,
+      // Redirect back to our app after consent
+      redirectUrl: redirectUri
+    };
+    console.log('🔗 Auth link request body:', authLinkBody);
+    
     const consentResponse = await fetch(`${BASIQ_API_BASE}/users/${basiqUserId}/auth_link`, {
       method: 'POST',
       headers: {
@@ -137,20 +198,34 @@ router.post('/consent', async (req: AuthenticatedRequest, res: Response, next: N
         'Content-Type': 'application/json',
         'basiq-version': '3.0'
       },
-      body: JSON.stringify({
-        mobile: req.user?.phone || undefined,
-        email: userEmail,
-        // Redirect back to our app after consent
-        redirectUrl: redirectUri
-      })
+      body: JSON.stringify(authLinkBody)
+    });
+
+    const consentResponseText = await consentResponse.text();
+    console.log('🔗 Auth link response:', { 
+      status: consentResponse.status, 
+      ok: consentResponse.ok,
+      body: consentResponseText.substring(0, 500) // Log first 500 chars
     });
 
     if (!consentResponse.ok) {
-      const error = await consentResponse.text();
-      console.error('Basiq consent link error:', error);
+      console.error('❌ Basiq consent link error:', consentResponseText);
       
-      // Fallback: Use direct Basiq consent URL format
+      // Check if it's because basiqUserId is invalid (temp/demo ID)
+      if (basiqUserId.startsWith('temp-') || basiqUserId.startsWith('demo-')) {
+        console.error('❌ Cannot create auth_link with temporary user ID. User creation must succeed first.');
+        return res.status(500).json({ 
+          success: false, 
+          error: 'Bank connection not available. API configuration issue.',
+          details: process.env.NODE_ENV === 'development' 
+            ? 'Basiq user creation failed - check API key permissions in Basiq Dashboard' 
+            : undefined
+        });
+      }
+      
+      // Fallback: Use direct Basiq consent URL format (may not work for all cases)
       const consentUrl = `https://consent.basiq.io/home?userId=${basiqUserId}&token=${accessToken}&redirectUrl=${encodeURIComponent(redirectUri)}`;
+      console.log('🔗 Using fallback consent URL');
       
       return res.json({
         success: true,
@@ -160,11 +235,25 @@ router.post('/consent', async (req: AuthenticatedRequest, res: Response, next: N
       });
     }
 
-    const consentData = await consentResponse.json() as { links?: { self?: string }; url?: string };
-    const consentUrl = consentData.url || consentData.links?.self;
+    let consentData: { links?: { self?: string; public?: string }; url?: string };
+    try {
+      consentData = JSON.parse(consentResponseText);
+    } catch (e) {
+      console.error('❌ Failed to parse consent response:', consentResponseText);
+      return res.status(500).json({ success: false, error: 'Invalid consent response from Basiq' });
+    }
+    
+    // Basiq returns the URL in links.public or links.self or url
+    const consentUrl = consentData.links?.public || consentData.url || consentData.links?.self;
+    console.log('🔗 Parsed consent data:', { 
+      hasUrl: !!consentData.url,
+      hasLinksPublic: !!consentData.links?.public,
+      hasLinksSelf: !!consentData.links?.self,
+      consentUrl: consentUrl?.substring(0, 100)
+    });
 
     if (!consentUrl) {
-      console.error('No consent URL in response:', consentData);
+      console.error('❌ No consent URL in response:', consentData);
       return res.status(500).json({ success: false, error: 'Failed to generate consent URL' });
     }
 
