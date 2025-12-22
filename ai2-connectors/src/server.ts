@@ -1,6 +1,9 @@
 // --- 📦 CONNECTORS SERVICE SERVER ---
 // embracingearth.space - Main server entry point for connectors service
 
+// Load environment variables FIRST - before any other imports
+import 'dotenv/config';
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';

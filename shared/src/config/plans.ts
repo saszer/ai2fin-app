@@ -3,7 +3,8 @@ export enum SubscriptionTier {
   FREE_TRIAL = 'FREE_TRIAL',
   LITE = 'LITE', 
   PRO = 'PRO',
-  ELITE = 'ELITE'
+  ELITE = 'ELITE',
+  ELITE_PLUS = 'ELITE_PLUS' // embracingearth.space - Premium tier with connectors
 }
 
 export enum SubscribableModule {

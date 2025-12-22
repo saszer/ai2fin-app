@@ -89,13 +89,43 @@ router.post('/consent', async (req: AuthenticatedRequest, res: Response, next: N
       basiqUserId = userData.id;
       console.log(`✅ Created Basiq user: ${basiqUserId}`);
     } else {
-      // User might already exist - that's OK for demo
-      // In production, store and lookup basiqUserId in your DB
+      // Parse error response
       const errorText = await createUserResponse.text();
       console.warn('Basiq user creation response:', errorText);
       
-      // Generate a deterministic user ID for demo purposes
-      basiqUserId = `demo-${crypto.createHash('md5').update(userId).digest('hex').substring(0, 12)}`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        const errorCode = errorJson.data?.[0]?.code;
+        
+        // Handle specific error cases
+        if (errorCode === 'access-denied') {
+          // API key doesn't have user creation permissions
+          // Check Basiq Dashboard → API Keys → Ensure correct scopes are enabled
+          console.error('❌ Basiq API key lacks user creation permissions. Check Basiq Dashboard.');
+          return res.status(403).json({
+            success: false,
+            error: 'Basiq API key configuration issue. Please contact support.',
+            details: process.env.NODE_ENV === 'development' 
+              ? 'API key needs user creation permissions in Basiq Dashboard' 
+              : undefined
+          });
+        }
+        
+        if (errorCode === 'invalid-credentials') {
+          console.error('❌ Basiq API key is invalid or expired');
+          return res.status(401).json({
+            success: false,
+            error: 'Basiq configuration error. Please contact support.'
+          });
+        }
+      } catch (e) {
+        // JSON parse failed, continue with fallback
+      }
+      
+      // Fallback: Try to use existing user or generate demo ID
+      // In production, we should look up existing basiqUserId from our database
+      console.warn('⚠️ User creation failed, attempting fallback...');
+      basiqUserId = `temp-${crypto.createHash('md5').update(userId).digest('hex').substring(0, 12)}`;
     }
 
     // Step 2: Create consent link for user to connect their bank

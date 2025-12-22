@@ -517,3 +517,4 @@ export class WiseConnector extends BaseConnector {
     return `${apiBase}/oauth/authorize?${params.toString()}`;
   }
 }
+
