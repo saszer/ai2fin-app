@@ -3,7 +3,7 @@ FROM node:18-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat git openssl1.1-compat
+RUN apk add --no-cache libc6-compat git openssl
 WORKDIR /app
 
 # Copy Prisma schema and scripts BEFORE npm install (needed for postinstall script)
