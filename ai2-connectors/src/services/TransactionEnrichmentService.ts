@@ -470,3 +470,4 @@ class TransactionEnrichmentService {
 export const transactionEnrichmentService = TransactionEnrichmentService.getInstance();
 export default transactionEnrichmentService;
 
+

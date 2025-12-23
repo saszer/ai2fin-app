@@ -33,7 +33,7 @@ import { createStandardTransaction } from '../utils/transactionNormalizer';
  */
 export class WiseConnector extends BaseConnector {
   protected readonly connectorId = 'wise';
-  protected readonly connectorType = 'payment' as const;
+  protected readonly connectorType = 'api' as const;
   protected readonly transactionSource = 'PAYMENT_API' as const;
 
   private readonly API_BASE_SANDBOX = 'https://api.sandbox.transferwise.tech';
@@ -517,4 +517,6 @@ export class WiseConnector extends BaseConnector {
     return `${apiBase}/oauth/authorize?${params.toString()}`;
   }
 }
+
+
 

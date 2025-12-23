@@ -61,6 +61,7 @@ export type TransactionSource =
   | 'CSV_IMPORT'         // CSV file import
   | 'MANUAL_API'         // Manual API input
   | 'WEBHOOK'            // Webhook-based input
+  | 'PAYMENT_API'        // Payment API (Wise, Stripe, etc.)
   | 'CUSTOM';            // Custom connector
 
 /**
@@ -183,6 +184,8 @@ export interface ConnectorMetadata {
   // Documentation links
   documentationUrl?: string; // Link to connector documentation
   supportUrl?: string; // Link to support
+  logoUrl?: string; // Logo URL
+  supportedCountries?: string[]; // Supported country codes
 }
 
 /**
@@ -250,7 +253,10 @@ export enum ConnectorErrorCode {
   TOKEN_EXPIRED = 'TOKEN_EXPIRED',
   SYNC_FAILED = 'SYNC_FAILED',
   INVALID_DATA = 'INVALID_DATA',
-  TIMEOUT = 'TIMEOUT'
+  TIMEOUT = 'TIMEOUT',
+  AUTHENTICATION_FAILED = 'AUTHENTICATION_FAILED',
+  FETCH_FAILED = 'FETCH_FAILED',
+  CONFIGURATION_ERROR = 'CONFIGURATION_ERROR'
 }
 
 

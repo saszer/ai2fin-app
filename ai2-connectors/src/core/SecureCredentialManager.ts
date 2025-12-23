@@ -25,6 +25,7 @@ export interface SecureConnection {
   createdAt: Date;
   updatedAt: Date;
   expiresAt?: Date;
+  metadata?: Record<string, any>; // Connection-specific metadata
 }
 
 /**

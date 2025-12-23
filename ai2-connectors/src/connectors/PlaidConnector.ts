@@ -92,8 +92,9 @@ export class PlaidConnector extends BaseConnector {
     
     if (!clientId || !secret || clientId === 'your_client_id' || secret === 'your_secret') {
       throw new ConnectorError(
-        ConnectorErrorCode.AUTHENTICATION_FAILED,
         'Plaid API credentials not configured',
+        ConnectorErrorCode.AUTHENTICATION_FAILED,
+        500,
         { hint: 'Get credentials from https://dashboard.plaid.com/developers/keys' }
       );
     }
@@ -127,6 +128,7 @@ export class PlaidConnector extends BaseConnector {
   }
 
   async connect(
+    userId: string,
     credentials: ConnectorCredentials,
     settings?: ConnectorSettings
   ): Promise<ConnectorConnection> {
@@ -136,8 +138,9 @@ export class PlaidConnector extends BaseConnector {
     
     if (!accessToken || !itemId) {
       throw new ConnectorError(
+        'Access token and item ID are required',
         ConnectorErrorCode.INVALID_CREDENTIALS,
-        'Access token and item ID are required'
+        400
       );
     }
     
@@ -155,21 +158,52 @@ export class PlaidConnector extends BaseConnector {
     if (!response.ok) {
       const error = await response.json() as any;
       throw new ConnectorError(
-        ConnectorErrorCode.CONNECTION_FAILED,
         error.error_message || 'Failed to connect to Plaid',
+        ConnectorErrorCode.CONNECTION_FAILED,
+        response.status,
         { plaidError: error }
       );
     }
     
     const data = await response.json() as any;
     
+    // Fetch accounts to include in connection
+    const accountsResponse = await fetch(`${PLAID_BASE_URL}/accounts/get`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: clientId,
+        secret: secret,
+        access_token: accessToken,
+      }),
+    });
+    
+    const accountsData = accountsResponse.ok ? await accountsResponse.json() as any : { accounts: [] };
+    
     return {
       id: itemId,
       connectorId: this.connectorId,
+      connectorType: this.connectorType,
+      userId,
       status: 'connected',
-      lastSync: new Date().toISOString(),
+      accounts: (accountsData.accounts || []).map((acc: any) => ({
+        id: acc.account_id,
+        name: acc.name || acc.official_name || 'Account',
+        type: acc.type || 'other',
+        currency: acc.balances?.iso_currency_code || 'USD',
+        balance: acc.balances?.current || 0,
+        availableBalance: acc.balances?.available,
+        accountNumber: acc.mask,
+        bankName: data.item?.institution_id,
+        metadata: {
+          plaidAccountId: acc.account_id,
+          subtype: acc.subtype,
+        },
+      })),
+      settings: settings || {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
       metadata: {
-        accessToken, // Store encrypted in production
         itemId,
         institutionId: data.item?.institution_id,
         plaidItemStatus: data.item?.status,
@@ -177,29 +211,33 @@ export class PlaidConnector extends BaseConnector {
     };
   }
 
-  async disconnect(connectionId: string, credentials?: ConnectorCredentials): Promise<void> {
+  async disconnect(connectionId: string, credentials: ConnectorCredentials): Promise<boolean> {
     const { clientId, secret } = this.getPlaidCredentials();
-    const accessToken = credentials?.accessToken as string;
+    const accessToken = credentials.accessToken as string;
     
-    if (accessToken) {
-      try {
-        await fetch(`${PLAID_BASE_URL}/item/remove`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            client_id: clientId,
-            secret: secret,
-            access_token: accessToken,
-          }),
-        });
-        console.log(`🔌 Plaid item ${connectionId} removed`);
-      } catch (error) {
-        console.warn('Failed to remove Plaid item:', error);
-      }
+    if (!accessToken) {
+      return false;
+    }
+    
+    try {
+      const response = await fetch(`${PLAID_BASE_URL}/item/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: clientId,
+          secret: secret,
+          access_token: accessToken,
+        }),
+      });
+      console.log(`🔌 Plaid item ${connectionId} removed`);
+      return response.ok;
+    } catch (error) {
+      console.warn('Failed to remove Plaid item:', error);
+      return false;
     }
   }
 
-  async fetchAccounts(
+  async getAccounts(
     connectionId: string,
     credentials: ConnectorCredentials
   ): Promise<ConnectorAccount[]> {
@@ -219,8 +257,9 @@ export class PlaidConnector extends BaseConnector {
     if (!response.ok) {
       const error = await response.json() as any;
       throw new ConnectorError(
+        error.error_message || 'Failed to fetch Plaid accounts',
         ConnectorErrorCode.FETCH_FAILED,
-        error.error_message || 'Failed to fetch Plaid accounts'
+        response.status
       );
     }
     
@@ -228,35 +267,35 @@ export class PlaidConnector extends BaseConnector {
     
     return (data.accounts || []).map((acc: any) => ({
       id: acc.account_id,
-      connectorId: this.connectorId,
-      connectionId,
-      name: acc.name,
-      officialName: acc.official_name,
+      name: acc.name || acc.official_name || 'Account',
       type: this.mapAccountType(acc.type, acc.subtype),
-      subtype: acc.subtype,
+      currency: acc.balances?.iso_currency_code || 'USD',
       balance: acc.balances?.current || 0,
       availableBalance: acc.balances?.available,
-      currency: acc.balances?.iso_currency_code || 'USD',
-      mask: acc.mask,
+      accountNumber: acc.mask,
+      bankName: data.item?.institution_id,
       metadata: {
         plaidAccountId: acc.account_id,
         subtype: acc.subtype,
-        institutionId: data.item?.institution_id,
+        officialName: acc.official_name,
       },
     }));
   }
 
-  async syncTransactions(
+  async getTransactions(
     connectionId: string,
+    accountId: string,
     credentials: ConnectorCredentials,
     filter?: TransactionFilter
-  ): Promise<SyncResult> {
+  ): Promise<StandardTransaction[]> {
     const { clientId, secret } = this.getPlaidCredentials();
     const accessToken = credentials.accessToken as string;
     
-    const endDate = (filter?.endDate || new Date()).toISOString().split('T')[0];
-    const startDate = filter?.startDate 
-      ? filter.startDate.toISOString().split('T')[0]
+    const endDate = filter?.dateTo 
+      ? (typeof filter.dateTo === 'string' ? filter.dateTo : filter.dateTo.toISOString().split('T')[0])
+      : new Date().toISOString().split('T')[0];
+    const startDate = filter?.dateFrom
+      ? (typeof filter.dateFrom === 'string' ? filter.dateFrom : filter.dateFrom.toISOString().split('T')[0])
       : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     
     const response = await fetch(`${PLAID_BASE_URL}/transactions/get`, {
@@ -268,48 +307,77 @@ export class PlaidConnector extends BaseConnector {
         access_token: accessToken,
         start_date: startDate,
         end_date: endDate,
-        options: { count: 500, offset: 0 },
+        account_ids: [accountId],
+        options: { count: filter?.limit || 500, offset: 0 },
       }),
     });
     
     if (!response.ok) {
       const error = await response.json() as any;
       throw new ConnectorError(
+        error.error_message || 'Failed to fetch Plaid transactions',
         ConnectorErrorCode.FETCH_FAILED,
-        error.error_message || 'Failed to fetch Plaid transactions'
+        response.status
       );
     }
     
     const data = await response.json() as any;
-    const transactions: StandardTransaction[] = (data.transactions || []).map((tx: any) => 
-      createStandardTransaction({
-        id: tx.transaction_id,
-        source: this.transactionSource,
-        connectorId: this.connectorId,
-        accountId: tx.account_id,
-        date: new Date(tx.date),
-        description: tx.name,
-        amount: Math.abs(tx.amount),
-        type: tx.amount < 0 ? 'credit' : 'debit',
-        currency: tx.iso_currency_code || 'USD',
-        category: tx.category?.join(' > '),
-        merchantName: tx.merchant_name,
-        pending: tx.pending,
-        metadata: {
-          plaidTransactionId: tx.transaction_id,
-          categoryId: tx.category_id,
-          paymentChannel: tx.payment_channel,
-          location: tx.location,
+    return (data.transactions || []).map((tx: any) => 
+      createStandardTransaction(
+        {
+          id: tx.transaction_id,
+          accountId: tx.account_id,
+          date: new Date(tx.date),
+          description: tx.name,
+          amount: tx.amount, // Plaid uses positive for debits, negative for credits
+          type: tx.amount < 0 ? 'credit' : 'debit',
+          sourceType: tx.amount < 0 ? 'credit' : 'debit',
+          currency: tx.iso_currency_code || 'USD',
+          category: tx.category?.join(' > '),
+          merchant: tx.merchant_name,
+          pending: tx.pending,
+          metadata: {
+            plaidTransactionId: tx.transaction_id,
+            categoryId: tx.category_id,
+            paymentChannel: tx.payment_channel,
+            location: tx.location,
+          },
         },
-      })
+        '', // userId - will be set by framework
+        tx.account_id,
+        connectionId,
+        this.connectorId,
+        this.connectorType,
+        this.transactionSource
+      )
     );
+  }
+
+  async sync(
+    connectionId: string,
+    credentials: ConnectorCredentials,
+    filter?: TransactionFilter
+  ): Promise<SyncResult> {
+    const accounts = await this.getAccounts(connectionId, credentials);
+    const allTransactions: StandardTransaction[] = [];
+    
+    for (const account of accounts) {
+      const transactions = await this.getTransactions(connectionId, account.id, credentials, filter);
+      allTransactions.push(...transactions);
+    }
     
     return {
       success: true,
-      transactionsAdded: transactions.length,
-      transactionsModified: 0,
-      transactionsRemoved: 0,
-      transactions,
+      connectionId,
+      transactions: allTransactions,
+      timestamp: new Date(),
+      stats: {
+        totalTransactions: allTransactions.length,
+        newTransactions: allTransactions.length,
+        skippedTransactions: 0,
+        startDate: filter?.dateFrom,
+        endDate: filter?.dateTo,
+      },
     };
   }
 
@@ -331,3 +399,4 @@ export class PlaidConnector extends BaseConnector {
     return mapping[type?.toLowerCase()] || 'other';
   }
 }
+

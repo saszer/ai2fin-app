@@ -24,3 +24,4 @@ if (fs.existsSync(schemaPath)) {
   console.log('ℹ️ Prisma schema not found, skipping client generation');
 }
 
+
