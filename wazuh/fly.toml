@@ -22,7 +22,12 @@ kill_timeout = "30s"
   processes = ["wazuh"]
 
   [[services.ports]]
-    port = 55000
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.ports]]
+    port = 443
     handlers = ["tls", "http"]
 
   [[services.http_checks]]
@@ -32,24 +37,6 @@ kill_timeout = "30s"
     method = "get"
     path = "/"
     protocol = "http"
-
-[[services]]
-  protocol = "tcp"
-  internal_port = 1514
-  processes = ["wazuh"]
-
-  [[services.ports]]
-    port = 1514
-    handlers = ["tcp"]
-
-[[services]]
-  protocol = "tcp"
-  internal_port = 1515
-  processes = ["wazuh"]
-
-  [[services.ports]]
-    port = 1515
-    handlers = ["tcp"]
 
 [processes]
   wazuh = "/var/ossec/bin/wazuh-control start"
