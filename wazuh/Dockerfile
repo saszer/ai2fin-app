@@ -14,6 +14,11 @@ COPY local_internal_options.conf /var/ossec/etc/local_internal_options.conf
 COPY custom_rules/ /var/ossec/etc/custom_rules/
 COPY custom_decoders/ /var/ossec/etc/custom_decoders/
 
+# Create required shared directory and ar.conf file (prevents config error)
+RUN mkdir -p /var/ossec/etc/shared && \
+    touch /var/ossec/etc/shared/ar.conf && \
+    echo "# Active Response Configuration - Disabled" > /var/ossec/etc/shared/ar.conf
+
 # Expose Wazuh API port (standard port per official docs)
 EXPOSE 55000
 
