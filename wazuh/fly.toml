@@ -1,6 +1,10 @@
 # Wazuh Manager - Self-Hosted SIEM/XDR Platform
+# fly.toml app configuration file for ai2-wazuh
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+# embracingearth.space
+
 app = "ai2-wazuh"
-primary_region = "syd"
+primary_region = "iad"
 kill_signal = "SIGTERM"
 kill_timeout = "30s"
 
@@ -16,36 +20,26 @@ kill_timeout = "30s"
 [experimental]
   auto_rollback = true
 
-[[services]]
-  protocol = "tcp"
+# Modern Fly.io http_service configuration
+[http_service]
   internal_port = 55000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
   processes = ["wazuh"]
 
-  [[services.ports]]
-    port = 80
-    handlers = ["http"]
-    force_https = true
-
-  [[services.ports]]
-    port = 443
-    handlers = ["tls", "http"]
-
-  [[services.http_checks]]
+  # Health checks for Wazuh API
+  [[http_service.checks]]
     interval = "30s"
     timeout = "10s"
-    grace_period = "60s"  # Fly.io caps at 60s, but Wazuh needs more - use tcp_checks as fallback
+    grace_period = "60s"  # Fly.io caps at 60s
     method = "get"
     path = "/"
     protocol = "https"  # Wazuh API uses HTTPS
     tls_skip_verify = true
-    # Wazuh API might take time to start - check if port is open first
-  
-  # TCP check as fallback - just verify port 55000 is open
-  [[services.tcp_checks]]
-    interval = "10s"
-    timeout = "2s"
-    grace_period = "60s"
 
+# Process definition
 [processes]
   # Wazuh Docker image uses s6-overlay to manage processes
   # The default CMD from the image handles startup automatically
@@ -53,11 +47,10 @@ kill_timeout = "30s"
   wazuh = "/init"
 
 [[vm]]
-  memory = "2gb"      # Wazuh needs more memory
+  memory = "2gb"      # Wazuh needs more memory (increased from 1gb)
   cpu_kind = "shared"
-  cpus = 2
+  cpus = 2            # Increased from 1 for better performance
 
 [mounts]
   source = "wazuh_data"
   destination = "/var/ossec/data"
-
