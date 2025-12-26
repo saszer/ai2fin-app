@@ -11,9 +11,16 @@
     <group>financial_app,transaction,high_value</group>
   </rule>
   
-  <!-- Multiple credential access attempts (bank connectors) -->
-  <rule id="100002" level="10" frequency="5" timeframe="60">
-    <if_matched_group>credential_access</if_matched_group>
+  <!-- Credential access event -->
+  <rule id="100015" level="10">
+    <match>credential_access|credential.*access|Credential.*read|Credential.*write|Credential.*delete</match>
+    <description>Credential access operation detected</description>
+    <group>financial_app,credential_access</group>
+  </rule>
+  
+  <!-- Multiple credential access attempts (Correlation Rule) -->
+  <rule id="100002" level="12" frequency="5" timeframe="60">
+    <if_matched_sid>100015</if_matched_sid>
     <description>Multiple credential access attempts detected (potential credential abuse)</description>
     <group>financial_app,credential_access,abuse</group>
   </rule>
