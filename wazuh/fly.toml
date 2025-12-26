@@ -1,0 +1,65 @@
+# Wazuh Manager - Self-Hosted SIEM/XDR Platform
+app = "ai2-wazuh"
+primary_region = "syd"
+kill_signal = "SIGTERM"
+kill_timeout = "30s"
+
+[build]
+  dockerfile = "Dockerfile"
+  build_args = { WAZUH_VERSION = "4.8.0" }
+
+[env]
+  NODE_ENV = "production"
+  # Wazuh API credentials - MUST be set via fly secrets!
+  # WAZUH_API_USER and WAZUH_API_PASSWORD are set via: fly secrets set
+
+[experimental]
+  auto_rollback = true
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 55000
+  processes = ["wazuh"]
+
+  [[services.ports]]
+    port = 55000
+    handlers = ["tls", "http"]
+
+  [[services.http_checks]]
+    interval = "30s"
+    timeout = "10s"
+    grace_period = "10s"
+    method = "get"
+    path = "/"
+    protocol = "http"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 1514
+  processes = ["wazuh"]
+
+  [[services.ports]]
+    port = 1514
+    handlers = ["tcp"]
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 1515
+  processes = ["wazuh"]
+
+  [[services.ports]]
+    port = 1515
+    handlers = ["tcp"]
+
+[processes]
+  wazuh = "/var/ossec/bin/wazuh-control start"
+
+[[vm]]
+  memory = "2gb"      # Wazuh needs more memory
+  cpu_kind = "shared"
+  cpus = 2
+
+[mounts]
+  source = "wazuh_data"
+  destination = "/var/ossec/data"
+
