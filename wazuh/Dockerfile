@@ -19,6 +19,15 @@ COPY custom_decoders/ /var/ossec/etc/custom_decoders/
 RUN mkdir -p /var/ossec/etc/shared
 COPY etc/shared/ar.conf /var/ossec/etc/shared/ar.conf
 
+# Copy init scripts for s6-overlay (runs before services start)
+# These scripts fix common issues like Filebeat lock conflicts
+COPY cont-init.d/ /etc/cont-init.d/
+RUN chmod +x /etc/cont-init.d/*.sh 2>/dev/null || true
+
+# Create missing audit-keys list file (prevents rule warnings)
+RUN mkdir -p /var/ossec/etc/lists
+COPY etc/lists/audit-keys /var/ossec/etc/lists/audit-keys
+
 # Expose Wazuh API port (standard port per official docs)
 EXPOSE 55000
 
