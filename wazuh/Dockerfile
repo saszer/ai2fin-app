@@ -21,8 +21,13 @@ COPY etc/shared/ar.conf /var/ossec/etc/shared/ar.conf
 
 # Copy init scripts for s6-overlay (runs before services start)
 # These scripts fix common issues like Filebeat lock conflicts
+# Note: Scripts run in alphabetical order (01-, 02-, etc.)
 COPY cont-init.d/ /etc/cont-init.d/
 RUN chmod +x /etc/cont-init.d/*.sh 2>/dev/null || true
+
+# Also copy to services.d for scripts that need to run after services start
+# This ensures API config is applied even if services start before init scripts
+RUN mkdir -p /etc/services.d/wazuh-api/finish.d || true
 
 # Create missing audit-keys list file (prevents rule warnings)
 RUN mkdir -p /var/ossec/etc/lists
