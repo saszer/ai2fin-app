@@ -17,10 +17,12 @@ COPY custom_decoders/ /var/ossec/etc/custom_decoders/
 # Expose Wazuh API port (standard port per official docs)
 EXPOSE 55000
 
-# Health check - Wazuh API endpoint
-HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
-  CMD /var/ossec/bin/wazuh-control status || exit 1
+# Health check - Check if Wazuh API is responding
+# Wazuh API uses HTTPS on port 55000
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+  CMD (curl -k -f https://localhost:55000/ || wget -q --no-check-certificate --spider https://localhost:55000/ || /var/ossec/bin/wazuh-control status) || exit 1
 
-# Start Wazuh (container's default CMD handles initialization)
-# The official image already has the correct CMD, but we can override if needed
+# Note: Wazuh Docker image uses s6-overlay (/init) as entrypoint
+# This automatically manages all Wazuh processes and keeps them running
+# We don't need to override CMD - the image handles it
 
