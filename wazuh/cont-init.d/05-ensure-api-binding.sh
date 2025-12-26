@@ -10,12 +10,20 @@ echo "Ensuring Wazuh API binds to 0.0.0.0:55000..."
 API_CONFIG="/var/ossec/api/configuration/api.yaml"
 API_CONFIG_BACKUP="${API_CONFIG}.backup"
 
+# Wait for Wazuh initialization to complete
+# Wazuh Docker image does initialization that may overwrite configs
+echo "Waiting for Wazuh initialization to complete..."
+sleep 10
+
 # Wait for API config directory to exist
-MAX_WAIT=30
+MAX_WAIT=60
 WAITED=0
 while [ ! -d "/var/ossec/api/configuration" ] && [ $WAITED -lt $MAX_WAIT ]; do
-    sleep 1
-    WAITED=$((WAITED + 1))
+    sleep 2
+    WAITED=$((WAITED + 2))
+    if [ $((WAITED % 10)) -eq 0 ]; then
+        echo "  Still waiting for API config directory... (${WAITED}s)"
+    fi
 done
 
 if [ ! -d "/var/ossec/api/configuration" ]; then
@@ -103,5 +111,20 @@ else
 fi
 
 echo "API binding configuration completed."
-echo "Note: API service may need to restart to pick up changes."
+
+# Force API to reload config by touching the config file
+# This triggers the API to re-read the configuration
+if [ -f "$API_CONFIG" ]; then
+    echo "Triggering API config reload..."
+    touch "$API_CONFIG" 2>/dev/null || true
+    
+    # If API process is running, send SIGHUP to reload config
+    API_PID=$(pgrep -f "wazuh-apid" | head -1)
+    if [ -n "$API_PID" ]; then
+        echo "Found API process (PID: $API_PID), attempting config reload..."
+        kill -HUP "$API_PID" 2>/dev/null || true
+    fi
+fi
+
+echo "Note: If API still doesn't bind, it may need a full restart."
 
