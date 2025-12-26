@@ -1,0 +1,74 @@
+# Wazuh Deployment Script
+# embracingearth.space - Quick deployment to Fly.io
+
+Write-Host "🚀 Deploying Wazuh to Fly.io" -ForegroundColor Cyan
+Write-Host "=============================" -ForegroundColor Cyan
+Write-Host ""
+
+# Change to script directory
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+Set-Location $scriptDir
+
+# Find flyctl
+$flyctl = $null
+$possiblePaths = @(
+    "flyctl",
+    "fly",
+    "$env:USERPROFILE\.fly\bin\flyctl.exe",
+    "$env:LOCALAPPDATA\fly\bin\flyctl.exe",
+    "C:\Program Files\fly\bin\flyctl.exe"
+)
+
+foreach ($path in $possiblePaths) {
+    try {
+        if (Get-Command $path -ErrorAction SilentlyContinue) {
+            $flyctl = $path
+            break
+        }
+    } catch {
+        # Continue searching
+    }
+}
+
+if (-not $flyctl) {
+    Write-Host "❌ Fly CLI not found in PATH" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Please install Fly CLI:" -ForegroundColor Yellow
+    Write-Host "  PowerShell: iwr https://fly.io/install.ps1 -useb | iex" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Or run manually:" -ForegroundColor Yellow
+    Write-Host "  flyctl deploy -a ai2-wazuh" -ForegroundColor Cyan
+    exit 1
+}
+
+Write-Host "✅ Found Fly CLI: $flyctl" -ForegroundColor Green
+Write-Host ""
+
+# Check status first
+Write-Host "📊 Checking current status..." -ForegroundColor Yellow
+try {
+    & $flyctl status -a ai2-wazuh 2>&1 | Out-Null
+} catch {
+    Write-Host "⚠️  App may not exist yet, will create during deploy" -ForegroundColor Yellow
+}
+Write-Host ""
+
+# Deploy
+Write-Host "🚀 Starting deployment..." -ForegroundColor Yellow
+Write-Host ""
+
+& $flyctl deploy -a ai2-wazuh --config fly.toml
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host ""
+    Write-Host "✅ Deployment successful!" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "📋 Next steps:" -ForegroundColor Cyan
+    Write-Host "  1. Check status: flyctl status -a ai2-wazuh" -ForegroundColor White
+    Write-Host "  2. View logs: flyctl logs -a ai2-wazuh" -ForegroundColor White
+    Write-Host "  3. SSH to machine: flyctl ssh console -a ai2-wazuh" -ForegroundColor White
+} else {
+    Write-Host ""
+    Write-Host "❌ Deployment failed. Check logs above." -ForegroundColor Red
+    exit 1
+}
