@@ -1,52 +1,23 @@
-# Wazuh Manager - Self-Hosted SIEM/XDR Platform
-app = "ai2-wazuh"
-primary_region = "syd"
-kill_signal = "SIGTERM"
-kill_timeout = "30s"
+# fly.toml app configuration file generated for ai2-wazuh on 2025-12-26T09:10:44Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'ai2-wazuh'
+primary_region = 'iad'
 
 [build]
-  dockerfile = "Dockerfile"
-  build_args = { WAZUH_VERSION = "4.8.0" }
 
-[env]
-  NODE_ENV = "production"
-  # Wazuh API credentials - MUST be set via fly secrets!
-  # WAZUH_API_USER and WAZUH_API_PASSWORD are set via: fly secrets set
-
-[experimental]
-  auto_rollback = true
-
-[[services]]
-  protocol = "tcp"
+[http_service]
   internal_port = 55000
-  processes = ["wazuh"]
-
-  [[services.ports]]
-    port = 80
-    handlers = ["http"]
-    force_https = true
-
-  [[services.ports]]
-    port = 443
-    handlers = ["tls", "http"]
-
-  [[services.http_checks]]
-    interval = "30s"
-    timeout = "10s"
-    grace_period = "10s"
-    method = "get"
-    path = "/"
-    protocol = "http"
-
-[processes]
-  wazuh = "/var/ossec/bin/wazuh-control start"
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
 
 [[vm]]
-  memory = "2gb"      # Wazuh needs more memory
-  cpu_kind = "shared"
-  cpus = 2
-
-[mounts]
-  source = "wazuh_data"
-  destination = "/var/ossec/data"
-
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 1024
