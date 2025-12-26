@@ -1,0 +1,32 @@
+#!/usr/bin/with-contenv sh
+# Force API to bind to 0.0.0.0 after service starts
+# This runs every time the API service finishes/restarts
+# embracingearth.space
+
+set +e
+
+echo "Wazuh API service finished - ensuring 0.0.0.0 binding..."
+
+# Wait a moment
+sleep 2
+
+# Check and fix API config
+API_CONFIG="/var/ossec/api/configuration/api.yaml"
+if [ -f "$API_CONFIG" ]; then
+    # Ensure host is 0.0.0.0
+    if ! grep -q "0.0.0.0" "$API_CONFIG" 2>/dev/null; then
+        echo "Fixing API config to bind to 0.0.0.0..."
+        sed -i '/^host:/,/^[^ ]/ { /^host:/a\
+  - '\''0.0.0.0'\''
+  - '\''::'\''
+}' "$API_CONFIG" 2>/dev/null || true
+    fi
+fi
+
+# Check if port is listening
+if ! netstat -tuln 2>/dev/null | grep -q ":55000.*LISTEN" && \
+   ! ss -tuln 2>/dev/null | grep -q ":55000.*LISTEN"; then
+    echo "Port 55000 not listening - API may need restart"
+    # s6 will restart the service automatically
+fi
+

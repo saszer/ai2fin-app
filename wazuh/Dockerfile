@@ -25,9 +25,10 @@ COPY etc/shared/ar.conf /var/ossec/etc/shared/ar.conf
 COPY cont-init.d/ /etc/cont-init.d/
 RUN chmod +x /etc/cont-init.d/*.sh 2>/dev/null || true
 
-# Also copy to services.d for scripts that need to run after services start
-# This ensures API config is applied even if services start before init scripts
-RUN mkdir -p /etc/services.d/wazuh-api/finish.d || true
+# Copy post-service scripts (runs after each service restart)
+# This ensures API config is applied even after service restarts
+COPY services.d/ /etc/services.d/
+RUN chmod +x /etc/services.d/*/finish 2>/dev/null || true
 
 # Create missing audit-keys list file (prevents rule warnings)
 RUN mkdir -p /var/ossec/etc/lists
