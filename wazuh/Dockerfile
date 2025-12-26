@@ -10,6 +10,10 @@ FROM wazuh/wazuh-manager:4.8.0
 COPY wazuh.conf /var/ossec/etc/ossec.conf
 COPY local_internal_options.conf /var/ossec/etc/local_internal_options.conf
 
+# Copy custom rules and decoders for financial app
+COPY custom_rules/ /var/ossec/etc/custom_rules/
+COPY custom_decoders/ /var/ossec/etc/custom_decoders/
+
 # Expose Wazuh API port (standard port per official docs)
 EXPOSE 55000
 

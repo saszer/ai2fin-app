@@ -1,0 +1,90 @@
+<!-- Custom Wazuh Rules for Financial App -->
+<!-- embracingearth.space - Banking Platform Security Rules -->
+
+<group name="financial_app,">
+  
+  <!-- High-value transaction monitoring -->
+  <rule id="100001" level="12">
+    <if_sid>5710</if_sid>
+    <match>high_value_transaction|transaction.*amount.*[0-9]{5,}</match>
+    <description>High-value transaction detected in financial app</description>
+    <group>financial_app,transaction,high_value</group>
+  </rule>
+  
+  <!-- Multiple credential access attempts (bank connectors) -->
+  <rule id="100002" level="10">
+    <if_matched_group>credential_access</if_matched_group>
+    <frequency>5</frequency>
+    <timeframe>60</timeframe>
+    <description>Multiple credential access attempts detected (potential credential abuse)</description>
+    <group>financial_app,credential_access,abuse</group>
+  </rule>
+  
+  <!-- Unusual bank connector activity -->
+  <rule id="100003" level="11">
+    <if_sid>5716</if_sid>
+    <match>connector|bank.*connection</match>
+    <frequency>10</frequency>
+    <timeframe>300</timeframe>
+    <description>Unusual bank connector activity detected</description>
+    <group>financial_app,connector,anomaly</group>
+  </rule>
+  
+  <!-- Credential encryption/decryption operations -->
+  <rule id="100004" level="12">
+    <match>credential.*encrypt|credential.*decrypt|CREDENTIAL_ENCRYPTION</match>
+    <description>Credential encryption/decryption operation detected</description>
+    <group>financial_app,credential,encryption</group>
+  </rule>
+  
+  <!-- Rapid authentication failures (brute force) -->
+  <rule id="100005" level="15">
+    <if_sid>5710</if_sid>
+    <match>authentication_failure|jwt_verification_failed</match>
+    <frequency>3</frequency>
+    <timeframe>60</timeframe>
+    <description>Rapid authentication failures detected (potential brute force attack)</description>
+    <group>financial_app,authentication,brute_force</group>
+  </rule>
+  
+  <!-- Unusual API access patterns -->
+  <rule id="100006" level="10">
+    <match>api.*rate_limit|rate_limit_exceeded</match>
+    <frequency>5</frequency>
+    <timeframe>300</timeframe>
+    <description>Repeated rate limit violations (potential API abuse)</description>
+    <group>financial_app,api,abuse</group>
+  </rule>
+  
+  <!-- Suspicious user activity -->
+  <rule id="100007" level="11">
+    <match>suspicious_activity|anomaly_detected</match>
+    <description>Suspicious user activity detected in financial app</description>
+    <group>financial_app,user,anomaly</group>
+  </rule>
+  
+  <!-- Multiple bank connections in short time -->
+  <rule id="100008" level="12">
+    <match>bank.*connect|connector.*connect</match>
+    <frequency>5</frequency>
+    <timeframe>300</timeframe>
+    <description>Multiple bank connections in short time (unusual pattern)</description>
+    <group>financial_app,connector,multiple</group>
+  </rule>
+  
+  <!-- Data export/access patterns -->
+  <rule id="100009" level="10">
+    <match>export|data.*access|bulk.*download</match>
+    <description>Data export/access operation detected</description>
+    <group>financial_app,data,export</group>
+  </rule>
+  
+  <!-- Payment processing events -->
+  <rule id="100010" level="12">
+    <match>payment|transaction.*process|bank.*transfer</match>
+    <description>Payment processing event detected</description>
+    <group>financial_app,payment,processing</group>
+  </rule>
+  
+</group>
+

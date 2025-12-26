@@ -1,0 +1,45 @@
+<!-- Custom Wazuh Decoders for Financial App -->
+<!-- embracingearth.space - Banking Platform Log Parsing -->
+
+<decoder name="financial-app-auth">
+  <prematch>^\[AUTH\]|authentication|auth.*failure|auth.*success</prematch>
+  <regex>^\[AUTH\] (\w+) (success|failure) user=(\S+) ip=(\S+)</regex>
+  <order>action, result, user, srcip</order>
+</decoder>
+
+<decoder name="financial-app-jwt">
+  <prematch>JWT|jwt.*verification|token.*verification</prematch>
+  <regex>JWT verification (failed|success) ip=(\S+) user=(\S+)</regex>
+  <order>result, srcip, user</order>
+</decoder>
+
+<decoder name="financial-app-credential">
+  <prematch>Credential|credential.*access|bank.*credential</prematch>
+  <regex>Credential (read|write|delete|encrypt|decrypt) connection=(\S+) user=(\S+)</regex>
+  <order>action, connection, user</order>
+</decoder>
+
+<decoder name="financial-app-connector">
+  <prematch>connector|bank.*connector|connection.*bank</prematch>
+  <regex>(connector|bank.*connection) (connect|disconnect|sync|error) provider=(\S+) user=(\S+)</regex>
+  <order>type, action, provider, user</order>
+</decoder>
+
+<decoder name="financial-app-transaction">
+  <prematch>transaction|payment|transfer</prematch>
+  <regex>transaction (create|update|delete) amount=(\S+) user=(\S+)</regex>
+  <order>action, amount, user</order>
+</decoder>
+
+<decoder name="financial-app-rate-limit">
+  <prematch>rate.*limit|rate_limit|throttle</prematch>
+  <regex>rate.*limit (exceeded|hit) ip=(\S+) endpoint=(\S+)</regex>
+  <order>action, srcip, endpoint</order>
+</decoder>
+
+<decoder name="financial-app-api">
+  <prematch>^\[API\]|api.*call|endpoint.*access</prematch>
+  <regex>^\[API\] (\w+) (\S+) status=(\d+) user=(\S+)</regex>
+  <order>method, endpoint, status, user</order>
+</decoder>
+

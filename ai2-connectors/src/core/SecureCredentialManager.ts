@@ -227,6 +227,22 @@ class SecureCredentialManager {
         accountCount: options.accounts?.length || 0,
       }, timer.elapsed());
 
+      // Track connector creation in Wazuh (non-blocking)
+      sendWazuhEvent({
+        type: 'connector_connect',
+        severity: 'medium',
+        message: `Connector connected: ${connectorId}`,
+        ip: auditContext.ipAddress,
+        userAgent: auditContext.userAgent,
+        userId: auditContext.userId,
+        metadata: {
+          connectionId: connection.id,
+          connectorId,
+          institutionId: options.institutionId,
+          accountCount: options.accounts?.length || 0
+        }
+      });
+
       console.log(`✅ Connection created: ${connection.id} for user ${userId} (${connectorId})`);
       
       return this.toSecureConnection(connection);
@@ -320,6 +336,39 @@ class SecureCredentialManager {
         reason: auditContext.userAgent?.includes('sync') ? 'sync' : 'api_request',
       }, timer.elapsed());
       
+      // Track credential access in Wazuh (security monitoring)
+      try {
+        // Wazuh tracking for connectors service - send to core app's Wazuh if available
+        // Note: Connectors service can send events via API to core app's Wazuh
+        const wazuhManagerUrl = process.env.WAZUH_MANAGER_URL;
+        if (wazuhManagerUrl) {
+          const axios = require('axios');
+          const auth = Buffer.from(`${process.env.WAZUH_API_USER || 'wazuh'}:${process.env.WAZUH_API_PASSWORD || ''}`).toString('base64');
+          axios.post(`${wazuhManagerUrl}:55000/events`, {
+            timestamp: new Date().toISOString(),
+            agent: { id: '000', name: 'ai2-connectors' },
+            rule: {
+              id: 100002, // credential_access rule
+              level: 10,
+              description: `Credential read: ${connectionId}`,
+              groups: ['financial_app', 'credential_access']
+            },
+            data: {
+              srcip: auditContext.ipAddress,
+              user: userId,
+              action: 'read',
+              connectionId,
+              connectorId: connection.connectorId
+            }
+          }, {
+            headers: { 'Authorization': `Basic ${auth}` },
+            timeout: 2000
+          }).catch(() => {}); // Silently fail if Wazuh unavailable
+        }
+      } catch (wazuhError) {
+        // Silently continue if Wazuh not available
+      }
+      
       return credentials;
     } catch (error: any) {
       await auditService.failure('credential_access', {
@@ -358,6 +407,36 @@ class SecureCredentialManager {
       }, {
         action: 'update',
       }, timer.elapsed());
+      
+      // Track credential update in Wazuh (security monitoring)
+      try {
+        const wazuhManagerUrl = process.env.WAZUH_MANAGER_URL;
+        if (wazuhManagerUrl) {
+          const axios = require('axios');
+          const auth = Buffer.from(`${process.env.WAZUH_API_USER || 'wazuh'}:${process.env.WAZUH_API_PASSWORD || ''}`).toString('base64');
+          axios.post(`${wazuhManagerUrl}:55000/events`, {
+            timestamp: new Date().toISOString(),
+            agent: { id: '000', name: 'ai2-connectors' },
+            rule: {
+              id: 100002, // credential_access rule
+              level: 10,
+              description: `Credential write: ${connectionId}`,
+              groups: ['financial_app', 'credential_access']
+            },
+            data: {
+              srcip: auditContext.ipAddress,
+              user: userId,
+              action: 'write',
+              connectionId
+            }
+          }, {
+            headers: { 'Authorization': `Basic ${auth}` },
+            timeout: 2000
+          }).catch(() => {}); // Silently fail if Wazuh unavailable
+        }
+      } catch (wazuhError) {
+        // Silently continue if Wazuh not available
+      }
       
       console.log(`✅ Credentials updated for connection: ${connectionId}`);
     } catch (error: any) {

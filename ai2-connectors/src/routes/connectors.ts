@@ -7,6 +7,7 @@ import { AuthenticatedRequest } from '../middleware/auth';
 import { connectorRegistry } from '../core/ConnectorRegistry';
 import { secureCredentialManager } from '../core/SecureCredentialManager';
 import { auditService, AuditContext } from '../services/AuditService';
+import { sendWazuhEvent } from '../lib/wazuhHelper';
 import {
   ConnectorSettings,
   TransactionFilter,
@@ -187,6 +188,23 @@ router.post('/bank/connections/:id/sync', async (req: AuthenticatedRequest, res:
       connectorId: connection.connectorId,
     }, { type: 'manual' }, timer.elapsed());
 
+    // Track connector sync in Wazuh (non-blocking)
+    sendWazuhEvent({
+      type: 'connector_sync',
+      severity: 'medium',
+      message: `Connector sync initiated: ${connection.connectorId}`,
+      ip: auditContext.ipAddress,
+      userAgent: auditContext.userAgent,
+      userId: auditContext.userId,
+      path: req.path,
+      method: req.method,
+      metadata: {
+        connectionId,
+        connectorId: connection.connectorId,
+        syncType: 'manual'
+      }
+    });
+
     res.json({
       success: true,
       message: 'Sync initiated',
@@ -220,6 +238,22 @@ router.delete('/bank/connections/:id', async (req: AuthenticatedRequest, res: Re
 
     // Delete the connection (credentials deleted via cascade)
     await secureCredentialManager.deleteConnection(connectionId, userId, auditContext);
+    
+    // Track connector disconnect in Wazuh (non-blocking)
+    sendWazuhEvent({
+      type: 'connector_disconnect',
+      severity: 'medium',
+      message: `Connector disconnected: ${connection.connectorId}`,
+      ip: auditContext.ipAddress,
+      userAgent: auditContext.userAgent,
+      userId: auditContext.userId,
+      path: req.path,
+      method: req.method,
+      metadata: {
+        connectionId,
+        connectorId: connection.connectorId
+      }
+    });
     
     res.json({
       success: true,
