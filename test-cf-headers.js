@@ -185,7 +185,12 @@ async function testWithManualHeader() {
   console.log('\n\n🔐 Testing with Manual Header');
   console.log('=============================\n');
   
-  const testSecret = 'j5tNRc1kQpCUFwnY9cMcPpYrL2ShjQe7blN0Qhyf9rxl'; // From your CF rule
+  // Get secret from environment variable (never hardcode production secrets)
+  const testSecret = process.env.ORIGIN_SHARED_SECRET;
+  if (!testSecret) {
+    console.log('⚠️ Set ORIGIN_SHARED_SECRET environment variable to test');
+    return;
+  }
   const testEndpoint = 'https://api.ai2fin.com/health';
   
   try {

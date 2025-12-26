@@ -1,14 +1,29 @@
-// Debug server JWT secret
+/**
+ * DEBUG ONLY - Server JWT Configuration Tester
+ * ⚠️ SECURITY WARNING: This file is for LOCAL DEVELOPMENT debugging only.
+ * DO NOT run in production. DO NOT commit real credentials.
+ * 
+ * Usage: TEST_EMAIL=email TEST_PASSWORD=pass node debug-server-jwt.js
+ */
 const http = require('http');
 
 // Test endpoint to check server's JWT_SECRET
 async function testServerJWT() {
   console.log('🔍 Testing Server JWT Configuration...\n');
   
+  // Get credentials from environment (do not hardcode)
+  const testEmail = process.env.TEST_EMAIL;
+  const testPassword = process.env.TEST_PASSWORD;
+  
+  if (!testEmail || !testPassword) {
+    console.log('Usage: TEST_EMAIL=email TEST_PASSWORD=pass node debug-server-jwt.js');
+    process.exit(1);
+  }
+  
   // Make a request to get a token
   const postData = JSON.stringify({
-    email: 'test@embracingearth.space',
-    password: 'TestPass123!'
+    email: testEmail,
+    password: testPassword
   });
   
   const options = {
@@ -81,24 +96,9 @@ async function testServerJWT() {
         }
       }
       
-      // Test with a few common secrets to see if we can find the right one
-      const commonSecrets = [
-        'aifin-super-secret-jwt-key-2024-make-it-long-and-random',
-        'aifin-super-secret-jwt-key-2024-make-it-long-and-random-embracingearth-space',
-        'your_super_secure_jwt_secret_minimum_32_characters_embracingearth_space',
-        'default-secret'
-      ];
-      
-      console.log('\n🔍 Testing common JWT secrets...');
-      for (const secret of commonSecrets) {
-        try {
-          jwt.verify(token, secret, { algorithms: ['HS256'] });
-          console.log(`✅ Token verified with secret: ${secret.substring(0, 20)}...`);
-          break;
-        } catch (e) {
-          console.log(`❌ Failed with secret: ${secret.substring(0, 20)}...`);
-        }
-      }
+      // Test with JWT_SECRET from environment only
+      console.log('\n🔍 Token verification with JWT_SECRET from environment...');
+      // Note: Never hardcode or brute-force secrets - use environment variables only
       
     } else {
       console.log('❌ Login failed:', response.status, response.data);

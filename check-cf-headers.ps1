@@ -85,11 +85,18 @@ Write-Host "🔐 Testing with Manual Header" -ForegroundColor Cyan
 Write-Host "=============================" -ForegroundColor Cyan
 Write-Host ""
 
-$testSecret = "j5tNRc1kQpCUFwnY9cMcPpYrL2ShjQe7blN0Qhyf9rxl"  # From your CF rule
+# Get secret from environment variable (never hardcode production secrets)
+$testSecret = $env:ORIGIN_SHARED_SECRET
+if (-not $testSecret) {
+    Write-Host "⚠️ ORIGIN_SHARED_SECRET environment variable not set" -ForegroundColor Yellow
+    Write-Host "   Set it with: `$env:ORIGIN_SHARED_SECRET='your-secret'" -ForegroundColor Gray
+    exit 1
+}
+
 $testEndpoint = "https://api.ai2fin.com/health"
 
 try {
-    Write-Host "🧪 Testing with manual header: x-origin-auth: $testSecret" -ForegroundColor Yellow
+    Write-Host "🧪 Testing with manual header: x-origin-auth: [REDACTED]" -ForegroundColor Yellow
     
     $headers = @{"x-origin-auth" = $testSecret}
     $response = Invoke-WebRequest -Uri $testEndpoint -Method GET -Headers $headers -UseBasicParsing

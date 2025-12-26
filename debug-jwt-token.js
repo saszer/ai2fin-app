@@ -1,8 +1,21 @@
-// Debug JWT Token
+/**
+ * DEBUG ONLY - JWT Token Debugger
+ * ⚠️ SECURITY WARNING: This file is for LOCAL DEVELOPMENT debugging only.
+ * DO NOT run in production. DO NOT commit tokens to this file.
+ * 
+ * Usage: JWT_SECRET=your-secret node debug-jwt-token.js
+ * Pass token as argument: node debug-jwt-token.js <token>
+ */
 const jwt = require('jsonwebtoken');
 
-// Test the JWT token from our login
-const testToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InRlc3RAZW1icmFjaW5nZWFydGguc3BhY2UiLCJidXNpbmVzc1R5cGUiOiJidXNpbmVzcyIsImNvdW50cnlDb2RlIjoiQVUiLCJpYXQiOjE3NTYzMTI4NTMsImV4cCI6MTc1NjM5OTI1MywiaXNzIjoiYWkyLXBsYXRmb3JtIn0.jkkoiLN1LGv-mKlDfZ7s1qnV1UcyF9xL2YPfJd6hV5s';
+// Get token from command line argument (do not hardcode tokens)
+const testToken = process.argv[2];
+
+if (!testToken) {
+  console.log('Usage: JWT_SECRET=<secret> node debug-jwt-token.js <token>');
+  console.log('Example: JWT_SECRET=mykey node debug-jwt-token.js eyJhbGci...');
+  process.exit(1);
+}
 
 console.log('🔍 Debugging JWT Token...\n');
 

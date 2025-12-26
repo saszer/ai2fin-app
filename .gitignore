@@ -7,6 +7,8 @@
 # ==================================
 .env
 .env.*
+.en
+*.env
 !.env.example
 !env.*.template
 *.key
@@ -16,6 +18,9 @@
 secrets/
 config/secrets/
 vault/
+**/credentials.json
+**/*-secret*
+**/*-credentials*
 
 # ==================================
 # NODE.JS
@@ -247,3 +252,4 @@ ai2-ai-modules/
 # TestSprite - Disabled
 testsprite_tests/
 code_summary.json
+SECRET_ROTATION_GUIDE.md

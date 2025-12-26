@@ -14,7 +14,7 @@
 - **Core App Equivalent**: `JWT_SECRET` (same value)
 - **Set in Core App**: `fly secrets set JWT_SECRET="your-secret"`
 - **Set in Connectors**: `fly secrets set JWT_SECRET="your-secret"` (must match!)
-- **Example**: `JWT_SECRET="your-super-secret-jwt-key-here"`
+- **Example**: `JWT_SECRET="[YOUR_SECRET_KEY_HERE]"` ⚠️ Never use example values in production!
 
 **⚠️ CRITICAL**: Must be **identical** in both services. If they don't match, authentication will fail.
 
@@ -26,7 +26,7 @@
 - **Core App Equivalent**: `SERVICE_SECRET` (same value)
 - **Set in Core App**: `fly secrets set SERVICE_SECRET="your-service-secret"`
 - **Set in Connectors**: `fly secrets set SERVICE_SECRET="your-service-secret"` (must match!)
-- **Example**: `SERVICE_SECRET="your-service-to-service-secret"`
+- **Example**: `SERVICE_SECRET="[YOUR_SERVICE_SECRET_HERE]"` ⚠️ Never use example values in production!
 
 **⚠️ CRITICAL**: Must be **identical** in both services. Used for internal API calls.
 
