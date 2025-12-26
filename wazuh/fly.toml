@@ -33,12 +33,18 @@ kill_timeout = "30s"
   [[services.http_checks]]
     interval = "30s"
     timeout = "10s"
-    grace_period = "180s"
+    grace_period = "60s"  # Fly.io caps at 60s, but Wazuh needs more - use tcp_checks as fallback
     method = "get"
     path = "/"
-    protocol = "http"
+    protocol = "https"  # Wazuh API uses HTTPS
     tls_skip_verify = true
-    # Wazuh API might take time to start - longer grace period
+    # Wazuh API might take time to start - check if port is open first
+  
+  # TCP check as fallback - just verify port 55000 is open
+  [[services.tcp_checks]]
+    interval = "10s"
+    timeout = "2s"
+    grace_period = "60s"
 
 [processes]
   # Wazuh Docker image uses s6-overlay to manage processes
