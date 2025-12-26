@@ -12,20 +12,16 @@
   </rule>
   
   <!-- Multiple credential access attempts (bank connectors) -->
-  <rule id="100002" level="10">
+  <rule id="100002" level="10" frequency="5" timeframe="60">
     <if_matched_group>credential_access</if_matched_group>
-    <frequency>5</frequency>
-    <timeframe>60</timeframe>
     <description>Multiple credential access attempts detected (potential credential abuse)</description>
     <group>financial_app,credential_access,abuse</group>
   </rule>
   
   <!-- Unusual bank connector activity -->
-  <rule id="100003" level="11">
+  <rule id="100003" level="11" frequency="10" timeframe="300">
     <if_sid>5716</if_sid>
     <match>connector|bank.*connection</match>
-    <frequency>10</frequency>
-    <timeframe>300</timeframe>
     <description>Unusual bank connector activity detected</description>
     <group>financial_app,connector,anomaly</group>
   </rule>
@@ -38,20 +34,16 @@
   </rule>
   
   <!-- Rapid authentication failures (brute force) -->
-  <rule id="100005" level="15">
+  <rule id="100005" level="15" frequency="3" timeframe="60">
     <if_sid>5710</if_sid>
     <match>authentication_failure|jwt_verification_failed</match>
-    <frequency>3</frequency>
-    <timeframe>60</timeframe>
     <description>Rapid authentication failures detected (potential brute force attack)</description>
     <group>financial_app,authentication,brute_force</group>
   </rule>
   
   <!-- Unusual API access patterns -->
-  <rule id="100006" level="10">
+  <rule id="100006" level="10" frequency="5" timeframe="300">
     <match>api.*rate_limit|rate_limit_exceeded</match>
-    <frequency>5</frequency>
-    <timeframe>300</timeframe>
     <description>Repeated rate limit violations (potential API abuse)</description>
     <group>financial_app,api,abuse</group>
   </rule>
@@ -64,10 +56,8 @@
   </rule>
   
   <!-- Multiple bank connections in short time -->
-  <rule id="100008" level="12">
+  <rule id="100008" level="12" frequency="5" timeframe="300">
     <match>bank.*connect|connector.*connect</match>
-    <frequency>5</frequency>
-    <timeframe>300</timeframe>
     <description>Multiple bank connections in short time (unusual pattern)</description>
     <group>financial_app,connector,multiple</group>
   </rule>

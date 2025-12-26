@@ -20,10 +20,15 @@
   <!-- Database Access Anomaly -->
   <rule id="100032" level="12">
     <match>database.*error|database.*access|connection.*refused</match>
-    <frequency>10</frequency>
-    <timeframe>300</timeframe>
-    <description>Multiple database errors detected (potential attack)</description>
+    <description>Database access anomaly detected (potential attack)</description>
     <group>database_security,access_anomaly</group>
+  </rule>
+  
+  <!-- Multiple Database Errors (Correlation Rule) -->
+  <rule id="100039" level="14" frequency="10" timeframe="300">
+    <if_matched_sid>100032</if_matched_sid>
+    <description>Multiple database errors detected from same source (potential attack)</description>
+    <group>database_security,access_anomaly,correlation</group>
   </rule>
   
   <!-- Neon Database Connection Issues -->
@@ -43,10 +48,15 @@
   <!-- Database Credential Brute Force -->
   <rule id="100035" level="13">
     <match>database.*authentication.*failed|connection.*authentication</match>
-    <frequency>5</frequency>
-    <timeframe>60</timeframe>
     <description>Database credential brute force attempt</description>
     <group>database_security,brute_force</group>
+  </rule>
+  
+  <!-- Multiple Database Auth Failures (Correlation Rule) -->
+  <rule id="100040" level="15" frequency="5" timeframe="60">
+    <if_matched_sid>100035</if_matched_sid>
+    <description>Multiple database authentication failures (brute force attack)</description>
+    <group>database_security,brute_force,correlation</group>
   </rule>
   
   <!-- IDOR Attack (Insecure Direct Object Reference) -->
