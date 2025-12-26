@@ -18,11 +18,18 @@
     <group>financial_app,credential_access,abuse</group>
   </rule>
   
-  <!-- Unusual bank connector activity -->
-  <rule id="100003" level="11" frequency="10" timeframe="300">
+  <!-- Bank connector activity -->
+  <rule id="100003" level="11">
     <if_sid>5716</if_sid>
     <match>connector|bank.*connection</match>
-    <description>Unusual bank connector activity detected</description>
+    <description>Bank connector activity detected</description>
+    <group>financial_app,connector</group>
+  </rule>
+  
+  <!-- Unusual bank connector activity (Correlation Rule) -->
+  <rule id="100011" level="12" frequency="10" timeframe="300">
+    <if_matched_sid>100003</if_matched_sid>
+    <description>Unusual bank connector activity detected (multiple events)</description>
     <group>financial_app,connector,anomaly</group>
   </rule>
   
@@ -33,17 +40,31 @@
     <group>financial_app,credential,encryption</group>
   </rule>
   
-  <!-- Rapid authentication failures (brute force) -->
-  <rule id="100005" level="15" frequency="3" timeframe="60">
+  <!-- Authentication failures -->
+  <rule id="100005" level="12">
     <if_sid>5710</if_sid>
     <match>authentication_failure|jwt_verification_failed</match>
+    <description>Authentication failure detected</description>
+    <group>financial_app,authentication</group>
+  </rule>
+  
+  <!-- Rapid authentication failures (Correlation Rule) -->
+  <rule id="100012" level="15" frequency="3" timeframe="60">
+    <if_matched_sid>100005</if_matched_sid>
     <description>Rapid authentication failures detected (potential brute force attack)</description>
     <group>financial_app,authentication,brute_force</group>
   </rule>
   
-  <!-- Unusual API access patterns -->
-  <rule id="100006" level="10" frequency="5" timeframe="300">
+  <!-- API rate limit -->
+  <rule id="100006" level="8">
     <match>api.*rate_limit|rate_limit_exceeded</match>
+    <description>API rate limit violation detected</description>
+    <group>financial_app,api</group>
+  </rule>
+  
+  <!-- Repeated rate limit violations (Correlation Rule) -->
+  <rule id="100013" level="10" frequency="5" timeframe="300">
+    <if_matched_sid>100006</if_matched_sid>
     <description>Repeated rate limit violations (potential API abuse)</description>
     <group>financial_app,api,abuse</group>
   </rule>
@@ -55,9 +76,16 @@
     <group>financial_app,user,anomaly</group>
   </rule>
   
-  <!-- Multiple bank connections in short time -->
-  <rule id="100008" level="12" frequency="5" timeframe="300">
+  <!-- Bank connection -->
+  <rule id="100008" level="8">
     <match>bank.*connect|connector.*connect</match>
+    <description>Bank connection event detected</description>
+    <group>financial_app,connector</group>
+  </rule>
+  
+  <!-- Multiple bank connections (Correlation Rule) -->
+  <rule id="100014" level="12" frequency="5" timeframe="300">
+    <if_matched_sid>100008</if_matched_sid>
     <description>Multiple bank connections in short time (unusual pattern)</description>
     <group>financial_app,connector,multiple</group>
   </rule>
