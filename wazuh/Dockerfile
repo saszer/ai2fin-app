@@ -28,6 +28,11 @@ RUN chmod +x /etc/cont-init.d/*.sh 2>/dev/null || true
 RUN mkdir -p /var/ossec/etc/lists
 COPY etc/lists/audit-keys /var/ossec/etc/lists/audit-keys
 
+# Configure Wazuh API (separate service in Wazuh 4.x, not a wodle)
+# API configuration file location: /var/ossec/api/configuration/api.yaml
+RUN mkdir -p /var/ossec/api/configuration
+COPY api/configuration/api.yaml /var/ossec/api/configuration/api.yaml
+
 # Expose Wazuh API port (standard port per official docs)
 EXPOSE 55000
 

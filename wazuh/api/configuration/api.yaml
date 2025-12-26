@@ -1,0 +1,27 @@
+# Wazuh API Configuration
+# In Wazuh 4.x, API is a separate service, not a wodle
+# embracingearth.space
+
+host: ['0.0.0.0', '::']  # Listen on all interfaces (IPv4 and IPv6)
+port: 55000
+https:
+  enabled: yes
+  key: /var/ossec/etc/sslmanager.key
+  cert: /var/ossec/etc/sslmanager.cert
+  use_ca: no
+auth:
+  auth_token_exp_timeout: 900
+  rbac_mode: white
+cors:
+  enabled: yes
+  source_route: '*'
+  expose_headers: '*'
+  allow_headers: '*'
+  allow_credentials: yes
+cache:
+  enabled: yes
+  time_to_live: 350
+logs:
+  level: info
+  format: plain
+
