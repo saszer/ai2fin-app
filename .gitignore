@@ -244,3 +244,6 @@ desktop.ini
 # ==================================
 # Add project-specific patterns here 
 ai2-ai-modules/
+# TestSprite - Disabled
+testsprite_tests/
+code_summary.json
