@@ -45,6 +45,20 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
     # Check if wazuh-api or wazuh-apid process is running
     if pgrep -f "wazuh-api" > /dev/null 2>&1 || pgrep -f "wazuh-apid" > /dev/null 2>&1; then
         echo "Wazuh API process detected, waiting for port to be ready... (${ELAPSED}s)"
+        
+        # Check API logs for errors if available
+        if [ -f "/var/ossec/logs/api.log" ] && [ $((ELAPSED % 30)) -eq 0 ]; then
+            echo "  Checking API logs for errors..."
+            tail -5 /var/ossec/logs/api.log 2>/dev/null | grep -i "error\|fail\|bind" || true
+        fi
+        
+        # Check what address API is actually trying to bind to
+        if [ $((ELAPSED % 30)) -eq 0 ]; then
+            echo "  Checking API configuration..."
+            if [ -f "/var/ossec/api/configuration/api.yaml" ]; then
+                grep -A 3 "host:" /var/ossec/api/configuration/api.yaml 2>/dev/null | head -5 || true
+            fi
+        fi
     else
         echo "Wazuh API process not yet started, waiting... (${ELAPSED}s)"
     fi
