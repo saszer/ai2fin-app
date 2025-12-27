@@ -1,9 +1,9 @@
 #!/usr/bin/with-contenv sh
-# Fix Filebeat data path lock conflict
+# Fix Filebeat data path lock conflict (backup - Filebeat should be disabled by 00-disable-filebeat.sh)
 # This script runs before services start to clean up stale lock files
 # embracingearth.space
 
-set -e
+set +e  # Don't exit on error (Filebeat is optional)
 
 # Filebeat data directory
 FILEBEAT_DATA_DIR="/var/lib/filebeat"
