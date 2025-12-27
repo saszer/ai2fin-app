@@ -1,0 +1,26 @@
+# Wazuh Indexer Configuration
+# OpenSearch configuration for Wazuh Indexer
+# Single-node setup for Fly.io
+
+cluster.name: wazuh-cluster
+node.name: wazuh-indexer
+path.data: /var/lib/wazuh-indexer
+path.logs: /var/log/wazuh-indexer
+
+network.host: 0.0.0.0
+http.port: 9200
+
+# Discovery settings for single node
+discovery.type: single-node
+
+# Security settings (disabled for single-node localhost setup)
+plugins.security.disabled: true
+# For production, enable security with certificates
+# plugins.security.ssl.transport.pemcert_filepath: /etc/wazuh-indexer/certs/wazuh-indexer.pem
+# plugins.security.ssl.transport.pemkey_filepath: /etc/wazuh-indexer/certs/wazuh-indexer-key.pem
+# plugins.security.ssl.transport.pemtrustedcas_filepath: /etc/wazuh-indexer/certs/root-ca.pem
+
+# Performance settings for Fly.io (4GB RAM)
+bootstrap.memory_lock: false
+cluster.routing.allocation.disk.threshold_enabled: true
+

@@ -1,0 +1,56 @@
+# Wazuh Full Stack - Manager + Indexer + Dashboard
+# fly.toml app configuration file for ai2-wazuh
+# Single app deployment for cost efficiency
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+# embracingearth.space
+
+app = "ai2-wazuh"
+primary_region = "iad"
+kill_signal = "SIGTERM"
+kill_timeout = "30s"
+
+[build]
+  dockerfile = "Dockerfile.fullstack"
+  build_args = { WAZUH_VERSION = "4.8.0" }
+
+[env]
+  NODE_ENV = "production"
+  # Wazuh API credentials - MUST be set via fly secrets!
+  # WAZUH_API_USER and WAZUH_API_PASSWORD are set via: fly secrets set
+
+[experimental]
+  auto_rollback = true
+
+# Modern Fly.io http_service configuration
+# Dashboard is the main service exposed (port 5601)
+[http_service]
+  internal_port = 5601        # Dashboard port (main access point)
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["wazuh"]
+
+  # Health check for Dashboard
+  [[http_service.checks]]
+    interval = "60s"
+    timeout = "10s"
+    grace_period = "180s"     # Give all services time to start (Indexer takes ~2-3 min)
+    method = "get"
+    path = "/api/status"       # Dashboard health endpoint
+    protocol = "http"
+
+# Process definition
+[processes]
+  # Supervisord manages all three services (Manager, Indexer, Dashboard)
+  wazuh = "/usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf"
+
+[[vm]]
+  memory = "4gb"              # Full stack needs 4GB (Manager: 1GB, Indexer: 2GB, Dashboard: 1GB)
+  cpu_kind = "shared"
+  cpus = 2                    # 2 CPUs for better performance with all services
+
+[mounts]
+  source = "wazuh_data"
+  destination = "/var/ossec/data"
+

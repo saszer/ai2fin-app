@@ -1,0 +1,96 @@
+# Wazuh Full Stack Dockerfile for Fly.io
+# Manager + Indexer + Dashboard in single container
+# Self-hosted Wazuh SIEM/XDR platform
+# Based on official Wazuh Docker images approach
+FROM ubuntu:22.04
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV WAZUH_VERSION=4.8.0
+
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y \
+    curl \
+    wget \
+    gnupg \
+    lsb-release \
+    supervisor \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add Wazuh repository and install all components
+RUN curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --no-default-keyring --keyring /usr/share/keyrings/wazuh.gpg --import && \
+    echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" | tee /etc/apt/sources.list.d/wazuh.list && \
+    apt-get update && \
+    apt-get install -y \
+    wazuh-manager=${WAZUH_VERSION}-1 \
+    wazuh-indexer=${WAZUH_VERSION}-1 \
+    wazuh-dashboard=${WAZUH_VERSION}-1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configure Wazuh Manager
+COPY wazuh.conf /var/ossec/etc/ossec.conf
+COPY local_internal_options.conf /var/ossec/etc/local_internal_options.conf
+COPY custom_rules/ /var/ossec/etc/custom_rules/
+COPY custom_decoders/ /var/ossec/etc/custom_decoders/
+COPY etc/shared/ar.conf /var/ossec/etc/shared/ar.conf
+COPY etc/lists/audit-keys /var/ossec/etc/lists/audit-keys
+COPY api/configuration/api.yaml /var/ossec/api/configuration/api.yaml
+
+# Create required directories
+RUN mkdir -p /var/ossec/api/configuration/ssl && \
+    mkdir -p /var/ossec/api/configuration/security && \
+    mkdir -p /var/ossec/etc/lists && \
+    chown -R wazuh:wazuh /var/ossec/api/configuration && \
+    chown -R wazuh:wazuh /var/ossec/etc/lists
+
+# Configure Wazuh Indexer
+COPY indexer/opensearch.yml /etc/wazuh-indexer/opensearch.yml
+RUN mkdir -p /var/lib/wazuh-indexer && \
+    chown -R wazuh-indexer:wazuh-indexer /var/lib/wazuh-indexer && \
+    chown -R wazuh-indexer:wazuh-indexer /etc/wazuh-indexer
+
+# Configure Wazuh Dashboard
+COPY dashboard/opensearch_dashboards.yml /etc/wazuh-dashboard/opensearch_dashboards.yml
+RUN mkdir -p /var/lib/wazuh-dashboard && \
+    chown -R wazuh-dashboard:wazuh-dashboard /var/lib/wazuh-dashboard && \
+    chown -R wazuh-dashboard:wazuh-dashboard /etc/wazuh-dashboard
+
+# Copy init scripts
+COPY cont-init.d/ /etc/cont-init.d/
+RUN find /etc/cont-init.d/ -name "*.sh" -type f -exec sed -i 's/\r$//' {} \; && \
+    chmod +x /etc/cont-init.d/*.sh 2>/dev/null || true
+
+# Create log directories
+RUN mkdir -p /var/log/supervisor && \
+    mkdir -p /var/log/wazuh-indexer && \
+    mkdir -p /var/log/wazuh-dashboard
+
+# Configure supervisord to manage all services
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Create startup script that runs init scripts then supervisord
+RUN echo '#!/bin/bash\n\
+set -e\n\
+echo "Running initialization scripts..."\n\
+for script in /etc/cont-init.d/*.sh; do\n\
+  if [ -f "$script" ]; then\n\
+    echo "Running $script"\n\
+    bash "$script" || true\n\
+  fi\n\
+done\n\
+echo "Starting supervisord..."\n\
+exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf\n\
+' > /start.sh && chmod +x /start.sh
+
+# Expose ports
+EXPOSE 55000 9200 5601
+
+# Health check - Check Dashboard (main service)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
+  CMD curl -f http://localhost:5601/api/status || exit 1
+
+# Start script (runs init scripts then supervisord)
+CMD ["/start.sh"]
+
