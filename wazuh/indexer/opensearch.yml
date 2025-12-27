@@ -4,8 +4,9 @@
 
 cluster.name: wazuh-cluster
 node.name: wazuh-indexer
-# Use volume-mounted directory for data persistence
-path.data: /var/ossec/data/wazuh-indexer
+# Use /var/lib/wazuh-indexer for data (we'll symlink to volume for persistence)
+# This avoids permission issues with volume mount
+path.data: /var/lib/wazuh-indexer/data
 path.logs: /var/log/wazuh-indexer
 
 network.host: 0.0.0.0

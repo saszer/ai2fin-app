@@ -1,23 +1,30 @@
-#!/usr/bin/with-contenv sh
+#!/bin/bash
 # Setup data directories for Indexer and Dashboard
+# CRITICAL: Must run BEFORE services start to fix permissions
 # embracingearth.space
 
 set +e  # Don't exit on error - permissions might fail but we'll continue
 
 echo "Setting up data directories for Wazuh components..."
 
+# CRITICAL: Fix permissions on volume mount FIRST
+# Volume is mounted with root ownership, but services run as non-root users
+# We need to ensure the parent directory is accessible
+echo "Fixing permissions on /var/ossec/data..."
+chmod 755 /var/ossec/data
+chown root:root /var/ossec/data 2>/dev/null || true
+
 # Create Indexer data directories
-# CRITICAL: Fix permissions for volume mount - Indexer needs access to /var/ossec/data
-mkdir -p /var/ossec/data/wazuh-indexer/data
-mkdir -p /var/ossec/data/wazuh-indexer/logs
-mkdir -p /var/lib/wazuh-indexer
-# Fix permissions on the parent directory first
-chmod 755 /var/ossec/data 2>/dev/null || true
-chown -R wazuh-indexer:wazuh-indexer /var/ossec/data/wazuh-indexer 2>/dev/null || true
-chown -R wazuh-indexer:wazuh-indexer /var/lib/wazuh-indexer 2>/dev/null || true
-chmod -R 755 /var/ossec/data/wazuh-indexer 2>/dev/null || true
-# Ensure wazuh-indexer user can access the parent directory
-chmod 755 /var/ossec/data 2>/dev/null || true
+# Use /var/lib/wazuh-indexer (not volume) to avoid permission issues
+# We'll sync data to volume for persistence if needed
+echo "Creating Indexer data directories..."
+mkdir -p /var/lib/wazuh-indexer/data
+mkdir -p /var/lib/wazuh-indexer/logs
+mkdir -p /var/log/wazuh-indexer
+chown -R wazuh-indexer:wazuh-indexer /var/lib/wazuh-indexer
+chown -R wazuh-indexer:wazuh-indexer /var/log/wazuh-indexer
+chmod -R 755 /var/lib/wazuh-indexer
+chmod -R 755 /var/log/wazuh-indexer
 
 # Create Dashboard data directories
 mkdir -p /var/ossec/data/wazuh-dashboard
