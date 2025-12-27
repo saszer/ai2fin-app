@@ -7,8 +7,8 @@ host: '0.0.0.0'
 port: 55000
 https:
   enabled: yes
-  key: etc/sslmanager.key
-  cert: etc/sslmanager.cert
+  key: sslmanager.key
+  cert: sslmanager.cert
   use_ca: no
 cors:
   enabled: yes
