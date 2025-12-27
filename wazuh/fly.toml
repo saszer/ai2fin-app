@@ -50,9 +50,9 @@ kill_timeout = "30s"
   wazuh = "/init"
 
 [[vm]]
-  memory = "2gb"      # Wazuh needs more memory (increased from 1gb)
+  memory = "1gb"      # Wazuh needs more memory (increased from 1gb)
   cpu_kind = "shared"
-  cpus = 2            # Increased from 1 for better performance
+  cpus = 1            # Increased from 1 for better performance
 
 [mounts]
   source = "wazuh_data"
