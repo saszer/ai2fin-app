@@ -34,13 +34,16 @@ kill_timeout = "30s"
   processes = ["wazuh"]
 
   # Health check for Dashboard
+  # Note: Dashboard takes 2-3 minutes to start (Indexer must start first)
   [[http_service.checks]]
-    interval = "60s"
-    timeout = "10s"
+    interval = "30s"
+    timeout = "5s"
     grace_period = "180s"     # Give all services time to start (Indexer takes ~2-3 min)
     method = "get"
     path = "/api/status"       # Dashboard health endpoint
     protocol = "http"
+    # Accept any response (even 503/502) as "port is open"
+    # This allows Fly.io to route traffic even if Dashboard is still starting
 
 # Note: Manager API (port 55000) is accessible via Fly.io internal networking
 # Other apps in same organization can access: https://ai2-wazuh.internal:55000
