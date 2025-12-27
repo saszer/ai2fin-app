@@ -39,9 +39,12 @@ RUN mkdir -p /var/ossec/api/configuration/ssl
 COPY api/configuration/api.yaml /var/ossec/api/configuration/api.yaml
 
 # Fix API database permissions (API needs write access to its database)
-# The certificate copy script (07-copy-api-certs.sh) is already copied via COPY cont-init.d/ above
+# The certificate copy script (07-copy-api-certs.sh) and permission fix (08-fix-permissions.sh) 
+# are already copied via COPY cont-init.d/ above
 RUN mkdir -p /var/ossec/api/configuration/security && \
-    chown -R wazuh:wazuh /var/ossec/api/configuration
+    mkdir -p /var/ossec/etc/lists && \
+    chown -R wazuh:wazuh /var/ossec/api/configuration && \
+    chown -R wazuh:wazuh /var/ossec/etc/lists
 
 # Expose Wazuh API port (standard port per official docs)
 EXPOSE 55000
