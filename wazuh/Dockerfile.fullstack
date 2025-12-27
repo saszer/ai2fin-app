@@ -48,13 +48,17 @@ RUN mkdir -p /var/ossec/api/configuration/ssl && \
 # Configure Wazuh Indexer
 COPY indexer/opensearch.yml /etc/wazuh-indexer/opensearch.yml
 RUN mkdir -p /var/lib/wazuh-indexer && \
+    mkdir -p /var/ossec/data/wazuh-indexer && \
     chown -R wazuh-indexer:wazuh-indexer /var/lib/wazuh-indexer && \
+    chown -R wazuh-indexer:wazuh-indexer /var/ossec/data/wazuh-indexer && \
     chown -R wazuh-indexer:wazuh-indexer /etc/wazuh-indexer
 
 # Configure Wazuh Dashboard
 COPY dashboard/opensearch_dashboards.yml /etc/wazuh-dashboard/opensearch_dashboards.yml
 RUN mkdir -p /var/lib/wazuh-dashboard && \
+    mkdir -p /var/ossec/data/wazuh-dashboard && \
     chown -R wazuh-dashboard:wazuh-dashboard /var/lib/wazuh-dashboard && \
+    chown -R wazuh-dashboard:wazuh-dashboard /var/ossec/data/wazuh-dashboard && \
     chown -R wazuh-dashboard:wazuh-dashboard /etc/wazuh-dashboard
 
 # Copy init scripts
