@@ -23,7 +23,9 @@ COPY etc/shared/ar.conf /var/ossec/etc/shared/ar.conf
 # These scripts fix common issues like Filebeat lock conflicts
 # Note: Scripts run in alphabetical order (01-, 02-, etc.)
 COPY cont-init.d/ /etc/cont-init.d/
-RUN chmod +x /etc/cont-init.d/*.sh 2>/dev/null || true
+# Fix line endings (CRLF to LF) and set execute permissions
+RUN find /etc/cont-init.d/ -name "*.sh" -type f -exec sed -i 's/\r$//' {} \; && \
+    chmod +x /etc/cont-init.d/*.sh 2>/dev/null || true
 
 # Note: We don't override services.d/wazuh-api/run - let official image handle it
 # The official Wazuh image already has the wazuh-api service properly configured
