@@ -16,25 +16,17 @@ API_CONFIG="/var/ossec/api/configuration/api.yaml"
 if [ -f "$API_CONFIG" ] && grep -q "0.0.0.0" "$API_CONFIG" 2>/dev/null; then
     echo "✓ API config has correct binding (0.0.0.0)"
     
-    # Method 1: Use wazuh-control to restart
-    if command -v /var/ossec/bin/wazuh-control >/dev/null 2>&1; then
-        echo "Method 1: Restarting via wazuh-control..."
-        /var/ossec/bin/wazuh-control stop wazuh-api 2>&1
-        sleep 3
-        /var/ossec/bin/wazuh-control start wazuh-api 2>&1
-        sleep 5
-    fi
-    
-    # Method 2: Kill API process and let s6 restart it
+    # Method 1: Kill API process and let s6 restart it (only restarts API, not all services)
     API_PID=$(pgrep -f "wazuh-apid" | head -1)
     if [ -n "$API_PID" ]; then
-        echo "Method 2: Killing API process (PID: $API_PID) to force s6 restart..."
-        kill -9 "$API_PID" 2>/dev/null || kill -TERM "$API_PID" 2>/dev/null || true
+        echo "Method 1: Killing API process (PID: $API_PID) to force s6 restart..."
+        echo "  (This only restarts API, not all Wazuh services)"
+        kill -TERM "$API_PID" 2>/dev/null || kill -9 "$API_PID" 2>/dev/null || true
         sleep 5
         echo "s6-overlay should restart API automatically"
     fi
     
-    # Method 3: Use s6 service control directly
+    # Method 2: Use s6 service control directly (if available)
     if [ -f "/etc/s6-overlay/s6-rc.d/wazuh-api/down" ]; then
         echo "Method 3: Using s6-rc to restart API..."
         s6-rc -u change wazuh-api 2>&1 || true

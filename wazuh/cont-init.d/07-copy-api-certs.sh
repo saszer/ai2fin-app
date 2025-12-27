@@ -65,12 +65,17 @@ if [ -f "$CERT_DEST" ]; then
   echo "✓ SSL certificate permissions set correctly"
   
   # Restart API to pick up certificates (if API is already running)
-  # This ensures the API binds to the port with the correct certificates
+  # NOTE: wazuh-control restart restarts ALL services, not just API!
+  # So we use kill + s6 auto-restart instead (only restarts API)
   if pgrep -f "wazuh-apid" > /dev/null 2>&1; then
     echo "  Restarting Wazuh API to apply SSL certificates..."
-    /var/ossec/bin/wazuh-control restart wazuh-apid 2>/dev/null || true
-    sleep 2
-    echo "✓ Wazuh API restarted"
+    API_PID=$(pgrep -f "wazuh-apid" | head -1)
+    if [ -n "$API_PID" ]; then
+      # Kill API process - s6 will auto-restart it (only API, not all services)
+      kill -TERM "$API_PID" 2>/dev/null || kill -9 "$API_PID" 2>/dev/null || true
+      sleep 3
+      echo "✓ Wazuh API restarted (s6 auto-restart)"
+    fi
   fi
 else
   echo "⚠ WARNING: SSL certificates not available, API may fail to start"
