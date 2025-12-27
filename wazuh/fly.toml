@@ -29,21 +29,14 @@ kill_timeout = "30s"
   min_machines_running = 0
   processes = ["wazuh"]
 
-  # Health checks for Wazuh API
-  # Using HTTP check with long grace period:
+  # Health checks disabled because:
   # - Wazuh API requires authentication (returns 401/403 without auth)
   # - Fly.io HTTP health checks cannot authenticate
-  # - Health check will fail (401), but after grace period Fly.io may still route traffic
-  # - Long grace period gives API time to start before checks begin
-  # - Alternative: Script 02 already verifies API readiness
-  [[http_service.checks]]
-    interval = "60s"      # Check less frequently
-    timeout = "10s"        # Longer timeout
-    grace_period = "60s"  # Fly.io maximum (was 90s, capped at 60s)
-    method = "get"
-    path = "/"            # API returns JSON even on 401/404
-    protocol = "https"    # Wazuh API uses HTTPS
-    tls_skip_verify = true # Self-signed certificates
+  # - Health check would always fail, preventing traffic routing
+  # - Our init scripts (02-wait-for-wazuh-api.sh) already verify API readiness
+  # - Fly.io will route traffic based on port availability
+  # Note: If you need health checks, consider creating a simple health endpoint
+  # on a different port that doesn't require authentication
 
 # Process definition
 [processes]
