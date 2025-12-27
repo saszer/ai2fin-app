@@ -30,17 +30,20 @@ kill_timeout = "30s"
   processes = ["wazuh"]
 
   # Health checks for Wazuh API
-  # Using TCP check instead of HTTP because:
+  # Using HTTP check with long grace period:
   # - Wazuh API requires authentication (returns 401/403 without auth)
   # - Fly.io HTTP health checks cannot authenticate
-  # - TCP check verifies port is open (doesn't require auth)
-  # - This allows Fly.io to route traffic even though HTTP check can't pass
+  # - Health check will fail (401), but after grace period Fly.io may still route traffic
+  # - Long grace period gives API time to start before checks begin
+  # - Alternative: Script 02 already verifies API readiness
   [[http_service.checks]]
-    interval = "30s"
-    timeout = "5s"
-    grace_period = "90s"  # Give API time to start (Wazuh takes 60-90s)
-    protocol = "tcp"      # TCP check - just verifies port is open
-    port = 55000          # Wazuh API port
+    interval = "60s"      # Check less frequently
+    timeout = "10s"        # Longer timeout
+    grace_period = "60s"  # Fly.io maximum (was 90s, capped at 60s)
+    method = "get"
+    path = "/"            # API returns JSON even on 401/404
+    protocol = "https"    # Wazuh API uses HTTPS
+    tls_skip_verify = true # Self-signed certificates
 
 # Process definition
 [processes]
