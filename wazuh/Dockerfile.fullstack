@@ -71,12 +71,16 @@ RUN mkdir -p /var/log/supervisor && \
     mkdir -p /var/log/wazuh-indexer && \
     mkdir -p /var/log/wazuh-dashboard
 
-# Verify binary paths exist
+# Verify binary paths and find actual locations
 RUN echo "Checking binary paths..." && \
-    ls -la /usr/share/wazuh-indexer/bin/opensearch 2>/dev/null || echo "⚠ Indexer binary not found" && \
-    ls -la /usr/share/wazuh-dashboard/bin/opensearch-dashboards 2>/dev/null || echo "⚠ Dashboard binary not found" && \
-    find /usr -name "opensearch" -type f 2>/dev/null | head -5 && \
-    find /usr -name "opensearch-dashboards" -type f 2>/dev/null | head -5 || true
+    (test -f /usr/share/wazuh-indexer/bin/opensearch && echo "✓ Indexer binary found" || echo "⚠ Indexer binary not at expected path") && \
+    (test -f /usr/share/wazuh-dashboard/bin/opensearch-dashboards && echo "✓ Dashboard binary found" || echo "⚠ Dashboard binary not at expected path") && \
+    echo "Searching for actual binary locations..." && \
+    find /usr/share -name "opensearch" -type f 2>/dev/null | head -3 && \
+    find /usr/share -name "opensearch-dashboards" -type f 2>/dev/null | head -3 && \
+    echo "Checking systemd service files..." && \
+    (test -f /etc/systemd/system/wazuh-indexer.service && cat /etc/systemd/system/wazuh-indexer.service | grep ExecStart || echo "No systemd service file") && \
+    (test -f /etc/systemd/system/wazuh-dashboard.service && cat /etc/systemd/system/wazuh-dashboard.service | grep ExecStart || echo "No systemd service file") || true
 
 # Configure supervisord to manage all services
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
