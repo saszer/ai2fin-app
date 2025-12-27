@@ -37,9 +37,10 @@ fi
 # Ensure lock directory exists (prevents errors)
 mkdir -p /var/lib/filebeat 2>/dev/null || true
 
-# Kill any running Filebeat processes (cleanup)
-pkill -f "filebeat" 2>/dev/null || true
-sleep 1  # Give processes time to exit
+# Note: We don't kill Filebeat processes here because:
+# 1. The service is disabled via 'down' file, so it won't start
+# 2. pkill can cause issues with shell script execution
+# 3. Any existing processes will be cleaned up by s6-overlay
 
 echo "✓ Filebeat disabled successfully (service will not start)"
 
