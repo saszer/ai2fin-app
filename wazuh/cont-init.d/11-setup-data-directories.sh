@@ -2,17 +2,22 @@
 # Setup data directories for Indexer and Dashboard
 # embracingearth.space
 
-set -e
+set +e  # Don't exit on error - permissions might fail but we'll continue
 
 echo "Setting up data directories for Wazuh components..."
 
 # Create Indexer data directories
+# CRITICAL: Fix permissions for volume mount - Indexer needs access to /var/ossec/data
 mkdir -p /var/ossec/data/wazuh-indexer/data
 mkdir -p /var/ossec/data/wazuh-indexer/logs
 mkdir -p /var/lib/wazuh-indexer
+# Fix permissions on the parent directory first
+chmod 755 /var/ossec/data 2>/dev/null || true
 chown -R wazuh-indexer:wazuh-indexer /var/ossec/data/wazuh-indexer 2>/dev/null || true
 chown -R wazuh-indexer:wazuh-indexer /var/lib/wazuh-indexer 2>/dev/null || true
 chmod -R 755 /var/ossec/data/wazuh-indexer 2>/dev/null || true
+# Ensure wazuh-indexer user can access the parent directory
+chmod 755 /var/ossec/data 2>/dev/null || true
 
 # Create Dashboard data directories
 mkdir -p /var/ossec/data/wazuh-dashboard
