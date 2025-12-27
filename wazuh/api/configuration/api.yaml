@@ -7,15 +7,19 @@ host: '0.0.0.0'
 port: 55000
 https:
   enabled: yes
-  key: /var/ossec/etc/sslmanager.key
-  cert: /var/ossec/etc/sslmanager.cert
+  key: etc/sslmanager.key
+  cert: etc/sslmanager.cert
   use_ca: no
 cors:
   enabled: yes
-  source_route: '*'
+  source_route: 'https://*.ai2fin.com,https://ai2fin.com,https://*.fly.dev'
   expose_headers: '*'
   allow_headers: '*'
   allow_credentials: yes
+# Rate limiting for API security
+max_request_per_minute: 300
+max_login_attempts: 5
+block_time: 300
 logs:
   level: info
   format: plain
