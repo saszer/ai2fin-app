@@ -51,8 +51,15 @@ if [ ! -f "$CERT_DIR/wazuh-manager.pem" ]; then
     echo "✓ Manager certificate generated"
 fi
 
-# Set permissions
-chown -R wazuh-indexer:wazuh-indexer "$CERT_DIR"
+# Set permissions (user created during package install, may not exist during init)
+# Check if user exists, if not, set permissions after services start
+if id "wazuh-indexer" &>/dev/null; then
+    chown -R wazuh-indexer:wazuh-indexer "$CERT_DIR" 2>/dev/null || true
+else
+    echo "⚠️ wazuh-indexer user not found yet (will be created during package install)"
+    chmod 755 "$CERT_DIR" 2>/dev/null || true
+    # Permissions will be fixed after package installation
+fi
 chmod 600 "$CERT_DIR"/*.pem "$CERT_DIR"/*.key 2>/dev/null || true
 
 echo "✓ Indexer certificates ready"
