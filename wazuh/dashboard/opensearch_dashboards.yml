@@ -22,8 +22,9 @@ wazuh.monitoring.frequency: 900
 wazuh.monitoring.shards: 5
 wazuh.monitoring.replicas: 1
 
-# Security settings - disabled to match Indexer configuration
-opensearch_security.disabled: true
+# Security settings - commented out to match Indexer (security disabled)
+# OpenSearch Dashboards doesn't support opensearch_security.disabled
+# Since Indexer has security disabled, Dashboard will work without security config
 # opensearch_security.multitenancy.enabled: true
 # opensearch_security.readonly_mode.roles: ["kibana_read_only"]
 
