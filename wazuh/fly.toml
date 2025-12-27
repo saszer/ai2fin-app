@@ -30,17 +30,15 @@ kill_timeout = "30s"
   processes = ["wazuh"]
 
   # Health checks for Wazuh API
-  # Temporarily disabled - API takes 2-3 minutes to fully start
-  # API is confirmed working but needs more time for health checks
-  # Will re-enable once startup time is optimized
-  # [[http_service.checks]]
-  #   interval = "30s"
-  #   timeout = "10s"
-  #   grace_period = "180s"  # API needs 2-3 minutes to start
-  #   method = "get"
-  #   path = "/"  # API returns JSON on any path, even 404
-  #   protocol = "https"  # Wazuh API uses HTTPS
-  #   tls_skip_verify = true  # Self-signed certificates
+  # Re-enabled with longer grace period - API detected as ready by init script
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "10s"
+    grace_period = "180s"  # Give API 3 minutes to fully start (max allowed)
+    method = "get"
+    path = "/"  # API returns JSON on any path, even 404
+    protocol = "https"  # Wazuh API uses HTTPS
+    tls_skip_verify = true  # Self-signed certificates
 
 # Process definition
 [processes]
