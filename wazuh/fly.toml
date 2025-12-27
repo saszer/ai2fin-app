@@ -30,16 +30,15 @@ kill_timeout = "30s"
   processes = ["wazuh"]
 
   # Health checks for Wazuh API
-  # Temporarily disabled - API takes longer to bind
-  # Will re-enable once API binding is confirmed
-  # [[http_service.checks]]
-  #   interval = "30s"
-  #   timeout = "10s"
-  #   grace_period = "60s"  # Fly.io caps at 60s
-  #   method = "get"
-  #   path = "/"
-  #   protocol = "https"  # Wazuh API uses HTTPS
-  #   tls_skip_verify = true
+  # API is confirmed working - responds with JSON even on 404
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "10s"
+    grace_period = "120s"  # Give API time to start (increased from 60s)
+    method = "get"
+    path = "/"  # API returns JSON on any path, even 404
+    protocol = "https"  # Wazuh API uses HTTPS
+    tls_skip_verify = true  # Self-signed certificates
 
 # Process definition
 [processes]

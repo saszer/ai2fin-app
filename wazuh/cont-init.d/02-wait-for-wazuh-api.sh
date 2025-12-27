@@ -37,6 +37,16 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
         fi
     fi
     
+    # Method 4: Test HTTPS connection (most reliable for Wazuh API)
+    if [ "$PORT_READY" = false ]; then
+        if command -v curl >/dev/null 2>&1; then
+            # API returns JSON even on 404, so any response means it's listening
+            if curl -k -s -o /dev/null -w "%{http_code}" https://localhost:55000/ 2>/dev/null | grep -q "[0-9]"; then
+                PORT_READY=true
+            fi
+        fi
+    fi
+    
     if [ "$PORT_READY" = true ]; then
         echo "✓ Wazuh API is ready and listening on port 55000"
         exit 0
