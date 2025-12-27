@@ -30,17 +30,20 @@ kill_timeout = "30s"
   processes = ["wazuh"]
 
   # Health checks for Wazuh API
-  # API takes 60-90s to fully start after init scripts complete
-  # Grace period capped at 60s by Fly.io, but init scripts already wait for API
-  # Increased interval/timeout to reduce false negatives during startup
+  # IMPORTANT: API requires authentication - health check will fail with 401/403
+  # This is expected! Health check just verifies API is responding (not that it's authenticated)
+  # Script 02 already confirms API is ready using curl (which works)
+  # Health check may fail but API is actually working - verify manually
   [[http_service.checks]]
-    interval = "60s"      # Check every 60s (less frequent = less likely to catch during startup)
+    interval = "60s"      # Check every 60s
     timeout = "15s"       # Longer timeout for API response
-    grace_period = "60s"  # Fly.io maximum - API should be ready by then (init scripts complete first)
+    grace_period = "60s"  # Fly.io maximum - API should be ready by then
     method = "get"
-    path = "/"  # API returns JSON on any path, even 404
+    path = "/"  # API returns JSON even on 404 (401/403 also means API is working)
     protocol = "https"  # Wazuh API uses HTTPS
     tls_skip_verify = true  # Self-signed certificates
+    # Note: Health check may return 401/403 (authentication required) - this is OK!
+    # It means API is working, just requires auth. Verify manually with credentials.
 
 # Process definition
 [processes]

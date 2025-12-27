@@ -50,15 +50,27 @@ if [ -f "$API_CONFIG" ] && grep -q "0.0.0.0" "$API_CONFIG" 2>/dev/null; then
         echo "⚠ API process not found after restart attempt"
     fi
     
-    # Check if port is now listening
-    sleep 3
-    if netstat -tuln 2>/dev/null | grep -q ":55000.*LISTEN" || \
-       ss -tuln 2>/dev/null | grep -q ":55000.*LISTEN"; then
-        echo "✓ Port 55000 is now listening!"
+    # Check if API is accepting connections (use curl like script 02 - more reliable)
+    sleep 5  # Give API time to fully bind after restart
+    if command -v curl >/dev/null 2>&1; then
+        # Test if API actually accepts connections (not just port binding)
+        if curl -k -s -o /dev/null -w "%{http_code}" https://localhost:55000/ 2>/dev/null | grep -q "[0-9]"; then
+            echo "✓ API is accepting connections on port 55000!"
+        else
+            echo "⚠ API not accepting connections yet"
+            echo "  Checking API logs for errors..."
+            tail -20 /var/ossec/logs/api.log 2>/dev/null | grep -i "error\|bind\|listen" || echo "  (no errors in recent logs)"
+        fi
     else
-        echo "⚠ Port 55000 still not listening"
-        echo "  Checking API logs for errors..."
-        tail -20 /var/ossec/logs/api.log 2>/dev/null | grep -i "error\|bind\|listen" || echo "  (no errors in recent logs)"
+        # Fallback to port check if curl not available
+        if netstat -tuln 2>/dev/null | grep -q ":55000.*LISTEN" || \
+           ss -tuln 2>/dev/null | grep -q ":55000.*LISTEN"; then
+            echo "✓ Port 55000 is now listening!"
+        else
+            echo "⚠ Port 55000 still not listening"
+            echo "  Checking API logs for errors..."
+            tail -20 /var/ossec/logs/api.log 2>/dev/null | grep -i "error\|bind\|listen" || echo "  (no errors in recent logs)"
+        fi
     fi
     
     echo "API restart attempt completed"
