@@ -16,10 +16,6 @@ cors:
   expose_headers: '*'
   allow_headers: '*'
   allow_credentials: yes
-# Rate limiting for API security
-max_request_per_minute: 300
-max_login_attempts: 5
-block_time: 300
 logs:
   level: info
   format: plain
