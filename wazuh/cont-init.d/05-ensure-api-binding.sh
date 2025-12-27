@@ -41,26 +41,29 @@ fi
 if [ -f "$API_CONFIG" ]; then
     echo "✓ API config file exists: $API_CONFIG"
     
-    # Check if host is set to 0.0.0.0
-    if grep -q "0.0.0.0" "$API_CONFIG" 2>/dev/null; then
-        echo "✓ API config contains 0.0.0.0"
+    # Check if host is set to 0.0.0.0 (must be a string, not a list for Wazuh 4.8)
+    if grep -q "^host:.*0.0.0.0" "$API_CONFIG" 2>/dev/null || grep -q "^host: '0.0.0.0'" "$API_CONFIG" 2>/dev/null; then
+        echo "✓ API config contains 0.0.0.0 binding (correct format)"
         
-        # Verify the format is correct
-        if grep -A 2 "host:" "$API_CONFIG" | grep -q "0.0.0.0" 2>/dev/null; then
-            echo "✓ API host binding looks correct"
+        # Verify it's a string format (not a list) - Wazuh 4.8 requires string
+        if grep -q "^host: '0.0.0.0'" "$API_CONFIG" 2>/dev/null || grep -q '^host: "0.0.0.0"' "$API_CONFIG" 2>/dev/null; then
+            echo "✓ API host binding format is correct (string format)"
         else
-            echo "⚠ Fixing API host binding format..."
-            # Use sed to fix the host binding if needed
-            sed -i "s/host:.*/host:\n  - '0.0.0.0'\n  - '::'/" "$API_CONFIG" 2>/dev/null || true
+            echo "⚠ Fixing API host binding to string format (Wazuh 4.8 requirement)..."
+            # Convert list format to string format if needed
+            sed -i "s/^host:.*/host: '0.0.0.0'/" "$API_CONFIG" 2>/dev/null || true
+            # Remove list items if present
+            sed -i "/^  - '0.0.0.0'/d" "$API_CONFIG" 2>/dev/null || true
+            sed -i "/^  - '::'/d" "$API_CONFIG" 2>/dev/null || true
         fi
     else
         echo "⚠ API config missing 0.0.0.0 binding, adding..."
-        # Add host binding if missing
+        # Add host binding as string (Wazuh 4.8 requirement)
         if grep -q "^host:" "$API_CONFIG" 2>/dev/null; then
-            sed -i "s/^host:.*/host:\n  - '0.0.0.0'\n  - '::'/" "$API_CONFIG" 2>/dev/null || true
+            sed -i "s/^host:.*/host: '0.0.0.0'/" "$API_CONFIG" 2>/dev/null || true
         else
             # Insert after port if host is missing
-            sed -i "/^port:/a host:\n  - '0.0.0.0'\n  - '::'" "$API_CONFIG" 2>/dev/null || true
+            sed -i "/^port:/a host: '0.0.0.0'" "$API_CONFIG" 2>/dev/null || true
         fi
     fi
 else
@@ -70,27 +73,19 @@ else
 # Auto-generated to ensure 0.0.0.0 binding
 # embracingearth.space
 
-host:
-  - '0.0.0.0'
-  - '::'
+host: '0.0.0.0'
 port: 55000
 https:
   enabled: yes
-  key: /var/ossec/etc/sslmanager.key
-  cert: /var/ossec/etc/sslmanager.cert
+  key: sslmanager.key
+  cert: sslmanager.cert
   use_ca: no
-auth:
-  auth_token_exp_timeout: 900
-  rbac_mode: white
 cors:
   enabled: yes
-  source_route: '*'
+  source_route: 'https://*.ai2fin.com,https://ai2fin.com,https://*.fly.dev'
   expose_headers: '*'
   allow_headers: '*'
   allow_credentials: yes
-cache:
-  enabled: yes
-  time_to_live: 350
 logs:
   level: info
   format: plain
