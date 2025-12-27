@@ -63,6 +63,15 @@ if [ -f "$CERT_DEST" ]; then
   chmod 600 "$CERT_DEST"
   chmod 644 /var/ossec/api/configuration/ssl/sslmanager.cert
   echo "✓ SSL certificate permissions set correctly"
+  
+  # Restart API to pick up certificates (if API is already running)
+  # This ensures the API binds to the port with the correct certificates
+  if pgrep -f "wazuh-apid" > /dev/null 2>&1; then
+    echo "  Restarting Wazuh API to apply SSL certificates..."
+    /var/ossec/bin/wazuh-control restart wazuh-apid 2>/dev/null || true
+    sleep 2
+    echo "✓ Wazuh API restarted"
+  fi
 else
   echo "⚠ WARNING: SSL certificates not available, API may fail to start"
 fi
