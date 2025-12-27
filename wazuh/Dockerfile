@@ -25,10 +25,9 @@ COPY etc/shared/ar.conf /var/ossec/etc/shared/ar.conf
 COPY cont-init.d/ /etc/cont-init.d/
 RUN chmod +x /etc/cont-init.d/*.sh 2>/dev/null || true
 
-# Copy post-service scripts (runs after each service restart)
-# This ensures API config is applied even after service restarts
-COPY services.d/ /etc/services.d/
-RUN chmod +x /etc/services.d/*/finish 2>/dev/null || true
+# Note: We don't override services.d/wazuh-api/run - let official image handle it
+# The official Wazuh image already has the wazuh-api service properly configured
+# We only add finish scripts if needed (but not for wazuh-api to avoid conflicts)
 
 # Create missing audit-keys list file (prevents rule warnings)
 RUN mkdir -p /var/ossec/etc/lists
