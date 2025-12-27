@@ -86,18 +86,20 @@ RUN echo "Checking binary paths..." && \
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Create startup script that runs init scripts then supervisord
-RUN echo '#!/bin/bash\n\
-set -e\n\
-echo "Running initialization scripts..."\n\
-for script in /etc/cont-init.d/*.sh; do\n\
-  if [ -f "$script" ]; then\n\
-    echo "Running $script"\n\
-    bash "$script" || true\n\
-  fi\n\
-done\n\
-echo "Starting supervisord..."\n\
-exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf\n\
-' > /start.sh && chmod +x /start.sh
+RUN cat > /start.sh << 'EOF'
+#!/bin/bash
+set +e  # Don't exit on error - let supervisord handle failures
+echo "Running initialization scripts..."
+for script in /etc/cont-init.d/*.sh; do
+  if [ -f "$script" ]; then
+    echo "Running $script"
+    bash "$script" || true
+  fi
+done
+echo "Starting supervisord..."
+exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+EOF
+RUN chmod +x /start.sh
 
 # Expose ports
 EXPOSE 55000 9200 5601
