@@ -35,8 +35,33 @@ COPY etc/lists/audit-keys /var/ossec/etc/lists/audit-keys
 
 # Configure Wazuh API (separate service in Wazuh 4.x, not a wodle)
 # API configuration file location: /var/ossec/api/configuration/api.yaml
-RUN mkdir -p /var/ossec/api/configuration
+RUN mkdir -p /var/ossec/api/configuration/ssl
 COPY api/configuration/api.yaml /var/ossec/api/configuration/api.yaml
+
+# Create SSL certificates for API (Wazuh Manager will generate them during init)
+# We create a script that will copy manager certificates to API location after init
+RUN echo '#!/bin/sh\n\
+# Copy SSL certificates from manager to API location\n\
+# Wait for Manager to generate certificates (up to 60 seconds)\n\
+MAX_WAIT=60\n\
+WAITED=0\n\
+while [ ! -f /var/ossec/etc/sslmanager.key ] && [ $WAITED -lt $MAX_WAIT ]; do\n\
+  sleep 2\n\
+  WAITED=$((WAITED + 2))\n\
+done\n\
+\n\
+if [ -f /var/ossec/etc/sslmanager.key ] && [ -f /var/ossec/etc/sslmanager.cert ]; then\n\
+  mkdir -p /var/ossec/api/configuration/ssl\n\
+  cp /var/ossec/etc/sslmanager.key /var/ossec/api/configuration/ssl/sslmanager.key\n\
+  cp /var/ossec/etc/sslmanager.cert /var/ossec/api/configuration/ssl/sslmanager.cert\n\
+  chown -R wazuh:wazuh /var/ossec/api/configuration/ssl\n\
+  chmod 600 /var/ossec/api/configuration/ssl/sslmanager.key\n\
+  chmod 644 /var/ossec/api/configuration/ssl/sslmanager.cert\n\
+  echo "✓ SSL certificates copied to API location"\n\
+else\n\
+  echo "⚠ WARNING: Manager SSL certificates not found, API may fail to start"\n\
+fi\n\
+' > /etc/cont-init.d/07-copy-api-certs.sh && chmod +x /etc/cont-init.d/07-copy-api-certs.sh
 
 # Expose Wazuh API port (standard port per official docs)
 EXPOSE 55000
