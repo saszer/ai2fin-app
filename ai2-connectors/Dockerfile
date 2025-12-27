@@ -17,6 +17,8 @@ RUN npm install
 
 # Rebuild the source code only when needed
 FROM base AS builder
+# Install OpenSSL 3.x for Prisma (required for Prisma query engine during build)
+RUN apk add --no-cache openssl
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

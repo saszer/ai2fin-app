@@ -6,6 +6,7 @@ import * as crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { auditService, AuditContext } from '../services/AuditService';
 import { ConnectorCredentials, ConnectorAccount, ConnectorSettings, ConnectionStatus } from '../types/connector';
+import { sendWazuhEvent } from '../lib/wazuhHelper';
 
 const ENCRYPTION_KEY = process.env.CREDENTIAL_ENCRYPTION_KEY;
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
