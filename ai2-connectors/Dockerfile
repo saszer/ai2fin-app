@@ -28,6 +28,9 @@ RUN npm run build
 FROM base AS runner
 WORKDIR /app
 
+# Install OpenSSL 3.x for Prisma (required for Prisma query engine)
+RUN apk add --no-cache openssl
+
 ENV NODE_ENV=production
 ENV PORT=3003
 # Disable cluster mode for containerized deployments
