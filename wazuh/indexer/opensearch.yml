@@ -32,8 +32,9 @@ plugins.security.ssl.transport.resolve_hostname: false
 # HTTP SSL (optional - we use HTTP since it's localhost only)
 plugins.security.ssl.http.enabled: false
 
-# Admin DN (empty for self-signed certs)
-plugins.security.authcz.admin_dn: []
+# Admin DN - matches CN of admin certificate
+plugins.security.authcz.admin_dn:
+  - "CN=admin"
 
 # Audit
 plugins.security.audit.type: internal_opensearch

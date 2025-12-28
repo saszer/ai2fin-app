@@ -1,66 +1,98 @@
-#!/usr/bin/with-contenv sh
+#!/bin/bash
 # Generate Wazuh Indexer certificates for single-node setup
-# This script creates self-signed certificates for Indexer
+# Stores certificates in persistent volume to survive restarts
 # embracingearth.space
 
 set +e  # Don't exit on error
 
-echo "Generating Wazuh Indexer certificates..."
+echo "=== Generating Wazuh Indexer certificates ==="
 
+# Use persistent storage for certificates
+PERSISTENT_CERT_DIR="/var/ossec/data/certs"
 CERT_DIR="/etc/wazuh-indexer/certs"
+
+mkdir -p "$PERSISTENT_CERT_DIR"
 mkdir -p "$CERT_DIR"
 
-# Generate root CA
-if [ ! -f "$CERT_DIR/root-ca.pem" ]; then
-    openssl genrsa -out "$CERT_DIR/root-ca-key.pem" 2048
-    openssl req -new -x509 -days 3650 -subj "/CN=wazuh-ca" \
-        -key "$CERT_DIR/root-ca-key.pem" \
-        -out "$CERT_DIR/root-ca.pem"
-    echo "✓ Root CA generated"
-fi
-
-# Generate Indexer certificate
-if [ ! -f "$CERT_DIR/wazuh-indexer.pem" ]; then
-    openssl genrsa -out "$CERT_DIR/wazuh-indexer-key.pem" 2048
-    openssl req -new -subj "/CN=wazuh-indexer" \
-        -key "$CERT_DIR/wazuh-indexer-key.pem" \
-        -out "$CERT_DIR/wazuh-indexer.csr"
-    openssl x509 -req -in "$CERT_DIR/wazuh-indexer.csr" \
-        -CA "$CERT_DIR/root-ca.pem" \
-        -CAkey "$CERT_DIR/root-ca-key.pem" \
-        -CAcreateserial \
-        -out "$CERT_DIR/wazuh-indexer.pem" \
-        -days 3650
-    rm -f "$CERT_DIR/wazuh-indexer.csr"
-    echo "✓ Indexer certificate generated"
-fi
-
-# Generate Manager certificate for Indexer connection
-if [ ! -f "$CERT_DIR/wazuh-manager.pem" ]; then
-    openssl genrsa -out "$CERT_DIR/wazuh-manager-key.pem" 2048
-    openssl req -new -subj "/CN=wazuh-manager" \
-        -key "$CERT_DIR/wazuh-manager-key.pem" \
-        -out "$CERT_DIR/wazuh-manager.csr"
-    openssl x509 -req -in "$CERT_DIR/wazuh-manager.csr" \
-        -CA "$CERT_DIR/root-ca.pem" \
-        -CAkey "$CERT_DIR/root-ca-key.pem" \
-        -CAcreateserial \
-        -out "$CERT_DIR/wazuh-manager.pem" \
-        -days 3650
-    rm -f "$CERT_DIR/wazuh-manager.csr"
-    echo "✓ Manager certificate generated"
-fi
-
-# Set permissions (user created during package install, may not exist during init)
-# Check if user exists, if not, set permissions after services start
-if id "wazuh-indexer" &>/dev/null; then
-    chown -R wazuh-indexer:wazuh-indexer "$CERT_DIR" 2>/dev/null || true
+# Check if we already have certificates in persistent storage
+if [ -f "$PERSISTENT_CERT_DIR/wazuh-indexer.pem" ] && [ -f "$PERSISTENT_CERT_DIR/root-ca.pem" ]; then
+    echo "✓ Found existing certificates in persistent storage"
+    # Copy to expected location
+    cp -p "$PERSISTENT_CERT_DIR"/*.pem "$CERT_DIR/" 2>/dev/null || true
 else
-    echo "⚠️ wazuh-indexer user not found yet (will be created during package install)"
-    chmod 755 "$CERT_DIR" 2>/dev/null || true
-    # Permissions will be fixed after package installation
+    echo "Generating new certificates..."
+    
+    # Generate root CA
+    openssl genrsa -out "$PERSISTENT_CERT_DIR/root-ca-key.pem" 2048
+    openssl req -new -x509 -days 3650 -subj "/CN=wazuh-ca" \
+        -key "$PERSISTENT_CERT_DIR/root-ca-key.pem" \
+        -out "$PERSISTENT_CERT_DIR/root-ca.pem"
+    echo "✓ Root CA generated"
+
+    # Generate Indexer certificate with SAN for localhost
+    openssl genrsa -out "$PERSISTENT_CERT_DIR/wazuh-indexer-key.pem" 2048
+    
+    # Create config for SAN
+    cat > /tmp/indexer-cert.cnf <<EOF
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+CN = wazuh-indexer
+
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = localhost
+DNS.2 = wazuh-indexer
+IP.1 = 127.0.0.1
+EOF
+
+    openssl req -new -config /tmp/indexer-cert.cnf \
+        -key "$PERSISTENT_CERT_DIR/wazuh-indexer-key.pem" \
+        -out "$PERSISTENT_CERT_DIR/wazuh-indexer.csr"
+    
+    openssl x509 -req -in "$PERSISTENT_CERT_DIR/wazuh-indexer.csr" \
+        -CA "$PERSISTENT_CERT_DIR/root-ca.pem" \
+        -CAkey "$PERSISTENT_CERT_DIR/root-ca-key.pem" \
+        -CAcreateserial \
+        -out "$PERSISTENT_CERT_DIR/wazuh-indexer.pem" \
+        -days 3650 \
+        -extensions v3_req \
+        -extfile /tmp/indexer-cert.cnf
+    
+    rm -f "$PERSISTENT_CERT_DIR/wazuh-indexer.csr" /tmp/indexer-cert.cnf
+    echo "✓ Indexer certificate generated"
+
+    # Generate Admin certificate for security initialization
+    openssl genrsa -out "$PERSISTENT_CERT_DIR/admin-key.pem" 2048
+    openssl req -new -subj "/CN=admin" \
+        -key "$PERSISTENT_CERT_DIR/admin-key.pem" \
+        -out "$PERSISTENT_CERT_DIR/admin.csr"
+    openssl x509 -req -in "$PERSISTENT_CERT_DIR/admin.csr" \
+        -CA "$PERSISTENT_CERT_DIR/root-ca.pem" \
+        -CAkey "$PERSISTENT_CERT_DIR/root-ca-key.pem" \
+        -CAcreateserial \
+        -out "$PERSISTENT_CERT_DIR/admin.pem" \
+        -days 3650
+    rm -f "$PERSISTENT_CERT_DIR/admin.csr"
+    echo "✓ Admin certificate generated"
+
+    # Copy to expected location
+    cp -p "$PERSISTENT_CERT_DIR"/*.pem "$CERT_DIR/"
 fi
-chmod 600 "$CERT_DIR"/*.pem "$CERT_DIR"/*.key 2>/dev/null || true
+
+# Set permissions
+chown -R wazuh-indexer:wazuh-indexer "$CERT_DIR" 2>/dev/null || true
+chmod 600 "$CERT_DIR"/*.pem 2>/dev/null || true
+chmod 755 "$CERT_DIR"
+
+# Verify certificates
+echo "Certificate files:"
+ls -la "$CERT_DIR"/*.pem 2>/dev/null || echo "⚠️ No certificate files found!"
 
 echo "✓ Indexer certificates ready"
 

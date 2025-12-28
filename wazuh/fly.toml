@@ -55,8 +55,8 @@ kill_timeout = "30s"
 
 # Process definition
 [processes]
-  # Supervisord manages all three services (Manager, Indexer, Dashboard)
-  wazuh = "/usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf"
+  # /start.sh runs init scripts (certs, configs) then starts supervisord
+  wazuh = "/start.sh"
 
 [[vm]]
   memory = "4gb"              # Full stack needs 4GB (Manager: 1GB, Indexer: 2GB, Dashboard: 1GB)
