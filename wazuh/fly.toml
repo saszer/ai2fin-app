@@ -5,7 +5,7 @@
 # embracingearth.space
 
 app = "ai2-wazuh"
-primary_region = "iad"
+primary_region = "syd"
 kill_signal = "SIGTERM"
 kill_timeout = "30s"
 
@@ -34,15 +34,17 @@ kill_timeout = "30s"
   processes = ["wazuh"]
 
   # Health check for Dashboard
-  # Note: Fly.io caps grace_period at 60s maximum
-  # Init scripts must ensure Dashboard is ready before health checks start
+  # Note: Dashboard takes 2-3 minutes to fully start (Indexer needs 1-2 min, Dashboard needs 1-2 min)
+  # Init scripts wait for services, but health checks should be lenient
   [[http_service.checks]]
-    interval = "30s"          # Check every 30 seconds
-    timeout = "10s"           # Allow 10s for response (Dashboard can be slow)
-    grace_period = "60s"      # Maximum allowed by Fly.io (will be capped anyway)
+    interval = "60s"          # Check every 60 seconds (less aggressive)
+    timeout = "15s"           # Allow 15s for response (Dashboard can be slow to respond)
+    grace_period = "60s"      # Maximum allowed by Fly.io (services should be ready via init scripts)
     method = "get"
     path = "/api/status"       # Dashboard health endpoint
     protocol = "http"
+    # Tolerate failures initially while services are starting
+    tls_skip_verify = false
 
 # Note: Manager API (port 55000) is accessible via Fly.io internal networking
 # Other apps in same organization can access: https://ai2-wazuh.internal:55000

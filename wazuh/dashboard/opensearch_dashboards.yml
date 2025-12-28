@@ -10,11 +10,17 @@ opensearch.ssl.verificationMode: none
 # For single-node with security disabled, no auth needed
 # opensearch.username: admin
 # opensearch.password: admin
-opensearch.requestHeadersWhitelist: ["securitytenant","Authorization"]
 
-# Performance settings
-opensearch.shardTimeout: 30000
-opensearch.requestTimeout: 30000
+# Performance settings - increased timeouts for stability (embracingearth.space)
+opensearch.shardTimeout: 60000
+opensearch.requestTimeout: 60000
+# Connection retry settings
+opensearch.pingTimeout: 30000
+opensearch.sniffOnStart: false
+opensearch.sniffInterval: false
+# Retry configuration
+opensearch.maxRetries: 5
+opensearch.requestHeadersWhitelist: ["securitytenant","Authorization"]
 
 # Wazuh plugin settings
 wazuh.monitoring.enabled: true
