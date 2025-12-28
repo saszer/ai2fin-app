@@ -10,10 +10,17 @@ echo "Setting up data directories for Wazuh components..."
 
 # CRITICAL: Fix permissions on volume mount FIRST
 # Volume is mounted with root ownership, but services run as non-root users
-# We need to ensure the parent directory is accessible
+# We need to ensure the parent directory is accessible to wazuh-indexer user
 echo "Fixing permissions on /var/ossec/data..."
 chmod 755 /var/ossec/data
 chown root:root /var/ossec/data 2>/dev/null || true
+
+# CRITICAL: Ensure wazuh-indexer user can access /var/ossec/data
+# Add wazuh-indexer to a group that has access, or make it world-readable
+# Since we can't change volume ownership easily, make it group-readable
+chmod 775 /var/ossec/data 2>/dev/null || true
+# Ensure wazuh-indexer can traverse the directory
+chmod o+x /var/ossec/data 2>/dev/null || true
 
 # ============================================================================
 # INDEXER DATA PERSISTENCE (CRITICAL!)
@@ -95,10 +102,29 @@ fi
 # Create the directory if it doesn't exist
 mkdir -p "$INDEXER_PERSISTENT_DATA"
 
+# CRITICAL: Set permissions so wazuh-indexer user can access it
+# OpenSearch needs read/write/execute access to the data directory
+chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
+chmod -R 755 "$INDEXER_PERSISTENT_DATA"
+# Ensure Indexer can create indices (security plugin needs this)
+chmod 775 "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
+
+# CRITICAL: Also ensure parent directory is accessible
+# OpenSearch bootstrap checks parent directory permissions
+chmod 755 /var/ossec/data 2>/dev/null || true
+chmod o+x /var/ossec/data 2>/dev/null || true
+
 # Verify the directory exists and is accessible
 if [ ! -d "$INDEXER_PERSISTENT_DATA" ]; then
     echo "ERROR: Failed to create persistent data directory: $INDEXER_PERSISTENT_DATA"
     exit 1
+fi
+
+# Verify wazuh-indexer user can access the directory
+if ! sudo -u wazuh-indexer test -r "$INDEXER_PERSISTENT_DATA" 2>/dev/null; then
+    echo "WARNING: wazuh-indexer user cannot read data directory, fixing permissions..."
+    chmod -R 775 "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
+    chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
 fi
 
 echo "✓ Indexer will use persistent data directory directly: $INDEXER_PERSISTENT_DATA"
