@@ -27,16 +27,34 @@ echo "Setting up Indexer data persistence..."
 INDEXER_PERSISTENT_DATA="/var/ossec/data/wazuh-indexer-data"
 mkdir -p "$INDEXER_PERSISTENT_DATA"
 
-# CRITICAL: If security was previously disabled and now enabled, clear security index
+# CRITICAL: Clear incompatible security data when enabling security
 # Security index from non-secured Indexer is incompatible with secured Indexer
+# Also clear if security index is corrupted or incomplete
 if [ -d "$INDEXER_PERSISTENT_DATA/nodes" ]; then
-    # Check if security index exists (from previous non-secured run)
+    # Check if security index exists (from previous non-secured run or corrupted)
     if [ -d "$INDEXER_PERSISTENT_DATA/nodes/0/indices" ]; then
-        SECURITY_INDEX=$(find "$INDEXER_PERSISTENT_DATA/nodes/0/indices" -name ".opensearch_security" -type d 2>/dev/null | head -1)
-        if [ -n "$SECURITY_INDEX" ]; then
-            echo "⚠️ Found existing security index from previous run"
-            echo "⚠️ Removing incompatible security index (will be recreated with security enabled)..."
-            rm -rf "$SECURITY_INDEX" 2>/dev/null || true
+        # Find all security-related indices
+        SECURITY_INDICES=$(find "$INDEXER_PERSISTENT_DATA/nodes/0/indices" -name ".opensearch_security*" -o -name ".security*" 2>/dev/null)
+        if [ -n "$SECURITY_INDICES" ]; then
+            echo "⚠️ Found existing security indices from previous run"
+            echo "⚠️ Removing incompatible security indices (will be recreated with security enabled)..."
+            echo "$SECURITY_INDICES" | while read -r idx; do
+                if [ -n "$idx" ]; then
+                    echo "  Removing: $idx"
+                    rm -rf "$idx" 2>/dev/null || true
+                fi
+            done
+        fi
+        
+        # Also check for security configuration in cluster state
+        if [ -d "$INDEXER_PERSISTENT_DATA/nodes/0/_state" ]; then
+            echo "⚠️ Checking for security-related cluster state..."
+            find "$INDEXER_PERSISTENT_DATA/nodes/0/_state" -name "*security*" -o -name "*opensearch_security*" 2>/dev/null | while read -r state_file; do
+                if [ -n "$state_file" ]; then
+                    echo "  Removing security state: $state_file"
+                    rm -f "$state_file" 2>/dev/null || true
+                fi
+            done
         fi
     fi
 fi
@@ -94,6 +112,11 @@ chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || t
 chmod -R 755 "$INDEXER_PERSISTENT_DATA"
 # Ensure Indexer can create indices (security plugin needs this)
 chmod 775 "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
+
+# CRITICAL: Ensure security plugin can initialize
+# Create a marker file to indicate we've cleared old security data
+touch "$INDEXER_PERSISTENT_DATA/.security_cleared" 2>/dev/null || true
+chown wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA/.security_cleared" 2>/dev/null || true
 
 # Create logs directory (logs don't need persistence)
 mkdir -p /var/lib/wazuh-indexer/logs

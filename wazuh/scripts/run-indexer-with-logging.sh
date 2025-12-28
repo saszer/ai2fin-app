@@ -16,17 +16,20 @@ else
     exit 1
 fi
 
-# Diagnostic output
-echo "=== Indexer Startup Diagnostics ===" >&2
-echo "Binary: $INDEXER_BIN" >&2
-echo "Working directory: $(pwd)" >&2
-echo "User: $(whoami)" >&2
-echo "Data directory check:" >&2
-ls -la /var/lib/wazuh-indexer/data >&2 || echo "ERROR: Cannot access data directory" >&2
-echo "Certificate check:" >&2
-ls -la /etc/wazuh-indexer/certs/*.pem >&2 2>&1 | head -5 || echo "ERROR: Cannot access certificates" >&2
-echo "Starting Indexer..." >&2
+# Diagnostic output (to both stdout and stderr for visibility)
+echo "=== Indexer Startup Diagnostics ==="
+echo "Binary: $INDEXER_BIN"
+echo "Working directory: $(pwd)"
+echo "User: $(whoami)"
+echo "Data directory check:"
+ls -la /var/lib/wazuh-indexer/data || echo "ERROR: Cannot access data directory"
+echo "Certificate check:"
+ls -la /etc/wazuh-indexer/certs/*.pem 2>&1 | head -5 || echo "ERROR: Cannot access certificates"
+echo "Security config check:"
+grep -E "plugins.security.disabled|plugins.security.allow_default_init_securityindex" /etc/wazuh-indexer/opensearch.yml 2>&1 || echo "WARNING: Cannot read security config"
+echo "Starting Indexer..."
 
-# Run Indexer and capture all output
+# Run Indexer and capture all output (both stdout and stderr)
+# Redirect stderr to stdout so supervisord captures everything
 exec "$INDEXER_BIN" 2>&1
 
