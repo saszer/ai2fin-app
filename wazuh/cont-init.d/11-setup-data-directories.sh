@@ -10,17 +10,25 @@ echo "Setting up data directories for Wazuh components..."
 
 # CRITICAL: Fix permissions on volume mount FIRST
 # Volume is mounted with root ownership, but services run as non-root users
-# We need to ensure the parent directory is accessible to wazuh-indexer user
+# OpenSearch security bootstrap requires access to parent directory
 echo "Fixing permissions on /var/ossec/data..."
+# Make directory world-readable and executable so wazuh-indexer can access it
+# This is safe because it's a volume mount point, not sensitive data
 chmod 755 /var/ossec/data
 chown root:root /var/ossec/data 2>/dev/null || true
 
-# CRITICAL: Ensure wazuh-indexer user can access /var/ossec/data
-# Add wazuh-indexer to a group that has access, or make it world-readable
-# Since we can't change volume ownership easily, make it group-readable
-chmod 775 /var/ossec/data 2>/dev/null || true
-# Ensure wazuh-indexer can traverse the directory
-chmod o+x /var/ossec/data 2>/dev/null || true
+# CRITICAL: OpenSearch bootstrap checks parent directory access
+# Ensure wazuh-indexer user can traverse and read the directory
+# Use world permissions since we can't easily change volume ownership
+chmod 755 /var/ossec/data 2>/dev/null || true
+
+# Verify wazuh-indexer can access the directory
+if ! sudo -u wazuh-indexer test -x /var/ossec/data 2>/dev/null; then
+    echo "WARNING: wazuh-indexer cannot access /var/ossec/data, making world-accessible..."
+    chmod 755 /var/ossec/data 2>/dev/null || true
+    # Last resort: make it world-accessible
+    chmod 777 /var/ossec/data 2>/dev/null || true
+fi
 
 # ============================================================================
 # INDEXER DATA PERSISTENCE (CRITICAL!)
