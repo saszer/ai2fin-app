@@ -133,6 +133,15 @@ fi
 # Create the directory if it doesn't exist
 mkdir -p "$INDEXER_PERSISTENT_DATA"
 
+# CRITICAL: Create temp directory EARLY (OpenSearch checks it on startup)
+# OpenSearch uses temp directory for JVM operations and can run out of space on /tmp
+TEMP_DIR="/var/ossec/data/wazuh-indexer-tmp"
+echo "Creating temp directory on volume: $TEMP_DIR"
+mkdir -p "$TEMP_DIR"
+chown -R wazuh-indexer:wazuh-indexer "$TEMP_DIR" 2>/dev/null || true
+chmod -R 777 "$TEMP_DIR" 2>/dev/null || true
+echo "✓ Temp directory created: $TEMP_DIR"
+
 # CRITICAL: Set permissions so wazuh-indexer user can access it
 # OpenSearch needs read/write/execute access to the data directory
 chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
@@ -160,7 +169,7 @@ fi
 
 echo "✓ Indexer will use persistent data directory directly: $INDEXER_PERSISTENT_DATA"
 
-# Set permissions on symlink target (important for Indexer access)
+# Set permissions on data directory (important for Indexer access)
 # CRITICAL: Security plugin needs write access to create security index
 chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
 chmod -R 755 "$INDEXER_PERSISTENT_DATA"

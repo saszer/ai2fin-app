@@ -27,6 +27,37 @@ mkdir -p /var/ossec/data/wazuh-indexer-data
 chmod -R 777 /var/ossec/data/wazuh-indexer-data 2>/dev/null || true
 chown -R wazuh-indexer:wazuh-indexer /var/ossec/data/wazuh-indexer-data 2>/dev/null || true
 
+# CRITICAL: Create temp directory on volume (has more space than /tmp)
+# OpenSearch uses temp directory for JVM and other operations
+# Must be created BEFORE OpenSearch starts, and must be accessible to wazuh-indexer user
+TEMP_DIR="/var/ossec/data/wazuh-indexer-tmp"
+echo "Creating/verifying temp directory on volume: $TEMP_DIR"
+mkdir -p "$TEMP_DIR"
+chmod -R 777 "$TEMP_DIR" 2>/dev/null || true
+chown -R wazuh-indexer:wazuh-indexer "$TEMP_DIR" 2>/dev/null || true
+
+# Verify the directory exists and is accessible to wazuh-indexer
+if [ ! -d "$TEMP_DIR" ]; then
+    echo "ERROR: Failed to create temp directory: $TEMP_DIR"
+    exit 1
+fi
+
+# Test access as wazuh-indexer user
+if sudo -u wazuh-indexer test -w "$TEMP_DIR" 2>/dev/null; then
+    echo "✓ Temp directory is accessible to wazuh-indexer"
+else
+    echo "⚠ WARNING: wazuh-indexer cannot write to temp directory, attempting to fix..."
+    chmod -R 777 "$TEMP_DIR" 2>/dev/null || true
+    chown -R wazuh-indexer:wazuh-indexer "$TEMP_DIR" 2>/dev/null || true
+    # Verify again
+    if ! sudo -u wazuh-indexer test -w "$TEMP_DIR" 2>/dev/null; then
+        echo "ERROR: Cannot make temp directory accessible to wazuh-indexer"
+        echo "Directory permissions:"
+        ls -ld "$TEMP_DIR"
+        exit 1
+    fi
+fi
+
 # Verify permissions
 echo "Verifying permissions..."
 ls -ld /var/ossec/data
