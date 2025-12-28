@@ -28,10 +28,12 @@ kill_timeout = "30s"
 [http_service]
   internal_port = 5601        # Dashboard port (main access point)
   force_https = true
-  auto_stop_machines = "stop"   # Cost optimization: allow full stop
+  auto_stop_machines = "off"    # REQUIRED: Indexer needs 10+ min to start
   auto_start_machines = true    # Auto-start on request
-  min_machines_running = 0      # Cost optimization: no minimum
+  min_machines_running = 0      # Cost: no minimum
   processes = ["wazuh"]
+  # NOTE: Manually stop with: fly machine stop <machine-id> -a ai2-wazuh
+  # Manually start with: fly machine start <machine-id> -a ai2-wazuh
 
   # Health check DISABLED for cost-optimized cold start deployment
   # Reason: Indexer takes 6+ minutes to start on shared CPU
