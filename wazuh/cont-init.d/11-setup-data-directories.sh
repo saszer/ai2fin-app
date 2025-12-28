@@ -68,31 +68,25 @@ if [ ! -d "$INDEXER_PERSISTENT_DATA" ]; then
     exit 1
 fi
 
-# Create /var/lib/wazuh-indexer structure with symlink to persistent storage
-# Remove existing directory/file if it's not a symlink
-if [ -e "/var/lib/wazuh-indexer/data" ] && [ ! -L "/var/lib/wazuh-indexer/data" ]; then
+# CRITICAL: OpenSearch bootstrap code cannot handle symlinks
+# It requires path.data to be an actual directory, not a symlink
+# Solution: Use persistent volume path directly in opensearch.yml
+# No symlink needed - OpenSearch will use /var/ossec/data/wazuh-indexer-data directly
+
+# Migrate any existing data from old symlink location if it exists
+if [ -L "/var/lib/wazuh-indexer/data" ] || [ -d "/var/lib/wazuh-indexer/data" ]; then
     echo "Migrating existing Indexer data to persistent storage..."
-    # If there's existing data, copy it to persistent storage
-    if [ -d "/var/lib/wazuh-indexer/data" ] && [ "$(ls -A /var/lib/wazuh-indexer/data 2>/dev/null)" ]; then
-        cp -rp /var/lib/wazuh-indexer/data/* "$INDEXER_PERSISTENT_DATA/" 2>/dev/null || true
+    OLD_DATA="/var/lib/wazuh-indexer/data"
+    if [ -d "$OLD_DATA" ] && [ "$(ls -A "$OLD_DATA" 2>/dev/null)" ]; then
+        echo "Copying data from $OLD_DATA to $INDEXER_PERSISTENT_DATA..."
+        cp -rp "$OLD_DATA"/* "$INDEXER_PERSISTENT_DATA/" 2>/dev/null || true
     fi
-    rm -rf /var/lib/wazuh-indexer/data
+    # Remove old symlink or directory (OpenSearch will use persistent path directly)
+    rm -rf "$OLD_DATA" 2>/dev/null || true
 fi
 
-# Create parent directory
-mkdir -p /var/lib/wazuh-indexer
-
-# Remove broken symlink if it exists
-if [ -L "/var/lib/wazuh-indexer/data" ] && [ ! -e "/var/lib/wazuh-indexer/data" ]; then
-    echo "Removing broken symlink..."
-    rm -f /var/lib/wazuh-indexer/data
-fi
-
-# CRITICAL: OpenSearch requires the path to resolve to an actual directory
-# It cannot handle symlinks directly, so we need to ensure the target exists
-# and has proper permissions BEFORE creating the symlink
-
-# Ensure the persistent data directory exists and is a directory (not a file)
+# Ensure persistent data directory exists and has correct permissions
+# This is the directory OpenSearch will use directly (no symlink)
 if [ -e "$INDEXER_PERSISTENT_DATA" ] && [ ! -d "$INDEXER_PERSISTENT_DATA" ]; then
     echo "WARNING: Persistent data path exists but is not a directory, removing..."
     rm -rf "$INDEXER_PERSISTENT_DATA"
@@ -101,48 +95,13 @@ fi
 # Create the directory if it doesn't exist
 mkdir -p "$INDEXER_PERSISTENT_DATA"
 
-# CRITICAL: Remove existing symlink or directory if it exists
-# OpenSearch bootstrap code will fail if it tries to create a directory that exists as symlink
-if [ -L "/var/lib/wazuh-indexer/data" ]; then
-    echo "Removing existing symlink..."
-    rm -f /var/lib/wazuh-indexer/data
-elif [ -e "/var/lib/wazuh-indexer/data" ] && [ ! -d "/var/lib/wazuh-indexer/data" ]; then
-    echo "WARNING: /var/lib/wazuh-indexer/data exists but is not a directory, removing..."
-    rm -rf /var/lib/wazuh-indexer/data
-fi
-
-# Create symlink only if target directory exists and is valid
-if [ -d "$INDEXER_PERSISTENT_DATA" ] && [ ! -e "/var/lib/wazuh-indexer/data" ]; then
-    ln -sf "$INDEXER_PERSISTENT_DATA" /var/lib/wazuh-indexer/data
-    echo "✓ Indexer data directory symlinked to persistent volume"
-fi
-
-# CRITICAL: Verify symlink resolves to a valid directory
-# OpenSearch needs to be able to resolve the symlink to an actual directory
-if [ -L "/var/lib/wazuh-indexer/data" ]; then
-    LINK_TARGET=$(readlink -f /var/lib/wazuh-indexer/data 2>/dev/null || readlink /var/lib/wazuh-indexer/data)
-    if [ ! -d "$LINK_TARGET" ]; then
-        echo "ERROR: Symlink target is not a directory: $LINK_TARGET"
-        echo "Fixing: Creating target directory and recreating symlink..."
-        rm -f /var/lib/wazuh-indexer/data
-        mkdir -p "$INDEXER_PERSISTENT_DATA"
-        chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
-        chmod -R 755 "$INDEXER_PERSISTENT_DATA"
-        ln -sf "$INDEXER_PERSISTENT_DATA" /var/lib/wazuh-indexer/data
-    fi
-    
-    # Verify the resolved path is accessible
-    RESOLVED_PATH=$(readlink -f /var/lib/wazuh-indexer/data 2>/dev/null)
-    if [ -n "$RESOLVED_PATH" ] && [ -d "$RESOLVED_PATH" ]; then
-        echo "✓ Symlink resolves to valid directory: $RESOLVED_PATH"
-    else
-        echo "ERROR: Symlink does not resolve to a valid directory"
-        exit 1
-    fi
-elif [ ! -d "/var/lib/wazuh-indexer/data" ]; then
-    echo "ERROR: /var/lib/wazuh-indexer/data is not a directory or symlink"
+# Verify the directory exists and is accessible
+if [ ! -d "$INDEXER_PERSISTENT_DATA" ]; then
+    echo "ERROR: Failed to create persistent data directory: $INDEXER_PERSISTENT_DATA"
     exit 1
 fi
+
+echo "✓ Indexer will use persistent data directory directly: $INDEXER_PERSISTENT_DATA"
 
 # Set permissions on symlink target (important for Indexer access)
 # CRITICAL: Security plugin needs write access to create security index

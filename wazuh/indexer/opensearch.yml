@@ -4,9 +4,9 @@
 
 cluster.name: wazuh-cluster
 node.name: wazuh-indexer
-# Use /var/lib/wazuh-indexer for data (we'll symlink to volume for persistence)
-# This avoids permission issues with volume mount
-path.data: /var/lib/wazuh-indexer/data
+# Use persistent volume path directly (no symlink - OpenSearch bootstrap cannot handle symlinks)
+# Volume is mounted at /var/ossec/data, Indexer data stored in subdirectory
+path.data: /var/ossec/data/wazuh-indexer-data
 path.logs: /var/log/wazuh-indexer
 
 network.host: 0.0.0.0
