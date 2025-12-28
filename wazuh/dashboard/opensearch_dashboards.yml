@@ -2,6 +2,9 @@
 # OpenSearch Dashboards configuration for Wazuh Dashboard
 # Single-node setup for Fly.io
 # embracingearth.space
+#
+# NOTE: Using MINIMAL configuration to avoid validation errors
+# Wazuh plugin configuration is handled by the plugin itself
 
 server.host: 0.0.0.0
 server.port: 5601
@@ -17,10 +20,4 @@ opensearch.pingTimeout: 30000
 
 # Request headers whitelist
 opensearch.requestHeadersWhitelist: ["securitytenant","Authorization"]
-
-# Wazuh plugin settings
-wazuh.monitoring.enabled: true
-wazuh.monitoring.frequency: 900
-wazuh.monitoring.shards: 1
-wazuh.monitoring.replicas: 0
 
