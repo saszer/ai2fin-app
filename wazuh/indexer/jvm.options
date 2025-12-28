@@ -1,0 +1,35 @@
+# JVM options for Wazuh Indexer on Fly.io
+# Optimized for 4GB RAM shared CPU environment
+# embracingearth.space
+
+# Heap size - conservative for Fly.io shared CPU
+# Use 50% of available memory (2GB) but cap at 1.5GB for safety
+-Xms512m
+-Xmx1536m
+
+# GC settings - use G1GC for better performance on low memory
+-XX:+UseG1GC
+-XX:MaxGCPauseMillis=200
+-XX:InitiatingHeapOccupancyPercent=45
+
+# Prevent OOM kills
+-XX:+ExitOnOutOfMemoryError
+-XX:+CrashOnOutOfMemoryError
+
+# Logging
+-Xlog:gc*:file=/var/log/wazuh-indexer/gc.log:time,tags:filecount=5,filesize=64M
+
+# Security
+-Djava.security.policy=/usr/share/wazuh-indexer/plugins/opensearch-security/security.policy
+
+# Network
+-Djava.net.preferIPv4Stack=true
+
+# Performance
+-XX:+UseStringDeduplication
+-XX:+OptimizeStringConcat
+
+# Prevent crashes from low memory
+-XX:+HeapDumpOnOutOfMemoryError
+-XX:HeapDumpPath=/var/log/wazuh-indexer/heapdump.hprof
+

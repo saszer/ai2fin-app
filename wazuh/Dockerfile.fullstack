@@ -47,6 +47,7 @@ RUN mkdir -p /var/ossec/api/configuration/ssl && \
 
 # Configure Wazuh Indexer
 COPY indexer/opensearch.yml /etc/wazuh-indexer/opensearch.yml
+COPY indexer/jvm.options /etc/wazuh-indexer/jvm.options
 RUN mkdir -p /var/lib/wazuh-indexer && \
     mkdir -p /var/ossec/data/wazuh-indexer && \
     chown -R wazuh-indexer:wazuh-indexer /var/lib/wazuh-indexer && \
