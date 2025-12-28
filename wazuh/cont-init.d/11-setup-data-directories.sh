@@ -74,8 +74,11 @@ if [ -L "/var/lib/wazuh-indexer/data" ]; then
 fi
 
 # Set permissions on symlink target (important for Indexer access)
+# CRITICAL: Security plugin needs write access to create security index
 chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
 chmod -R 755 "$INDEXER_PERSISTENT_DATA"
+# Ensure Indexer can create indices (security plugin needs this)
+chmod 775 "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
 
 # Create logs directory (logs don't need persistence)
 mkdir -p /var/lib/wazuh-indexer/logs

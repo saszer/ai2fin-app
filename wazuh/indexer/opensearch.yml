@@ -32,9 +32,9 @@ plugins.security.ssl.transport.resolve_hostname: false
 # HTTP SSL (optional - we use HTTP since it's localhost only)
 plugins.security.ssl.http.enabled: false
 
-# Admin DN - matches CN of admin certificate
-plugins.security.authcz.admin_dn:
-  - "CN=admin"
+# Admin DN - empty for password-based authentication
+# Certificate-based admin auth not needed when using password auth
+plugins.security.authcz.admin_dn: []
 
 # Audit
 plugins.security.audit.type: internal_opensearch
