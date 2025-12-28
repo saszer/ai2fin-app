@@ -25,7 +25,7 @@ definition for this key is missing
 2. Dashboard failed to load configuration due to invalid key
 3. Dashboard crashed/exited immediately
 4. Port 5601 not listening → health check fails → 503 error
-
+ 
 ---
 
 ## ✅ **Fix Applied**
