@@ -7,8 +7,8 @@ host: '0.0.0.0'
 port: 55000
 https:
   enabled: yes
-  key: sslmanager.key
-  cert: sslmanager.cert
+  key: /var/ossec/etc/sslmanager.key
+  cert: /var/ossec/etc/sslmanager.cert
   use_ca: no
 cors:
   enabled: yes
