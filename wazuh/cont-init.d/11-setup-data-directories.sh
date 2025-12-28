@@ -88,22 +88,60 @@ if [ -L "/var/lib/wazuh-indexer/data" ] && [ ! -e "/var/lib/wazuh-indexer/data" 
     rm -f /var/lib/wazuh-indexer/data
 fi
 
-# Create symlink only if it doesn't exist
-if [ ! -e "/var/lib/wazuh-indexer/data" ]; then
+# CRITICAL: OpenSearch requires the path to resolve to an actual directory
+# It cannot handle symlinks directly, so we need to ensure the target exists
+# and has proper permissions BEFORE creating the symlink
+
+# Ensure the persistent data directory exists and is a directory (not a file)
+if [ -e "$INDEXER_PERSISTENT_DATA" ] && [ ! -d "$INDEXER_PERSISTENT_DATA" ]; then
+    echo "WARNING: Persistent data path exists but is not a directory, removing..."
+    rm -rf "$INDEXER_PERSISTENT_DATA"
+fi
+
+# Create the directory if it doesn't exist
+mkdir -p "$INDEXER_PERSISTENT_DATA"
+
+# CRITICAL: Remove existing symlink or directory if it exists
+# OpenSearch bootstrap code will fail if it tries to create a directory that exists as symlink
+if [ -L "/var/lib/wazuh-indexer/data" ]; then
+    echo "Removing existing symlink..."
+    rm -f /var/lib/wazuh-indexer/data
+elif [ -e "/var/lib/wazuh-indexer/data" ] && [ ! -d "/var/lib/wazuh-indexer/data" ]; then
+    echo "WARNING: /var/lib/wazuh-indexer/data exists but is not a directory, removing..."
+    rm -rf /var/lib/wazuh-indexer/data
+fi
+
+# Create symlink only if target directory exists and is valid
+if [ -d "$INDEXER_PERSISTENT_DATA" ] && [ ! -e "/var/lib/wazuh-indexer/data" ]; then
     ln -sf "$INDEXER_PERSISTENT_DATA" /var/lib/wazuh-indexer/data
     echo "✓ Indexer data directory symlinked to persistent volume"
 fi
 
-# CRITICAL: Verify symlink is valid and points to a directory
+# CRITICAL: Verify symlink resolves to a valid directory
+# OpenSearch needs to be able to resolve the symlink to an actual directory
 if [ -L "/var/lib/wazuh-indexer/data" ]; then
     LINK_TARGET=$(readlink -f /var/lib/wazuh-indexer/data 2>/dev/null || readlink /var/lib/wazuh-indexer/data)
     if [ ! -d "$LINK_TARGET" ]; then
         echo "ERROR: Symlink target is not a directory: $LINK_TARGET"
-        echo "Removing broken symlink and creating directory..."
+        echo "Fixing: Creating target directory and recreating symlink..."
         rm -f /var/lib/wazuh-indexer/data
         mkdir -p "$INDEXER_PERSISTENT_DATA"
+        chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
+        chmod -R 755 "$INDEXER_PERSISTENT_DATA"
         ln -sf "$INDEXER_PERSISTENT_DATA" /var/lib/wazuh-indexer/data
     fi
+    
+    # Verify the resolved path is accessible
+    RESOLVED_PATH=$(readlink -f /var/lib/wazuh-indexer/data 2>/dev/null)
+    if [ -n "$RESOLVED_PATH" ] && [ -d "$RESOLVED_PATH" ]; then
+        echo "✓ Symlink resolves to valid directory: $RESOLVED_PATH"
+    else
+        echo "ERROR: Symlink does not resolve to a valid directory"
+        exit 1
+    fi
+elif [ ! -d "/var/lib/wazuh-indexer/data" ]; then
+    echo "ERROR: /var/lib/wazuh-indexer/data is not a directory or symlink"
+    exit 1
 fi
 
 # Set permissions on symlink target (important for Indexer access)
