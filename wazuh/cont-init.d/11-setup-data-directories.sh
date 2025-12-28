@@ -29,38 +29,76 @@ mkdir -p "$INDEXER_PERSISTENT_DATA"
 chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
 chmod -R 755 "$INDEXER_PERSISTENT_DATA"
 
+# CRITICAL: Ensure the target directory exists and is a directory (not a file)
+if [ ! -d "$INDEXER_PERSISTENT_DATA" ]; then
+    echo "ERROR: Persistent data directory does not exist: $INDEXER_PERSISTENT_DATA"
+    exit 1
+fi
+
 # Create /var/lib/wazuh-indexer structure with symlink to persistent storage
-# Remove existing directory if it's not a symlink
-if [ -d "/var/lib/wazuh-indexer/data" ] && [ ! -L "/var/lib/wazuh-indexer/data" ]; then
+# Remove existing directory/file if it's not a symlink
+if [ -e "/var/lib/wazuh-indexer/data" ] && [ ! -L "/var/lib/wazuh-indexer/data" ]; then
     echo "Migrating existing Indexer data to persistent storage..."
     # If there's existing data, copy it to persistent storage
-    if [ "$(ls -A /var/lib/wazuh-indexer/data 2>/dev/null)" ]; then
+    if [ -d "/var/lib/wazuh-indexer/data" ] && [ "$(ls -A /var/lib/wazuh-indexer/data 2>/dev/null)" ]; then
         cp -rp /var/lib/wazuh-indexer/data/* "$INDEXER_PERSISTENT_DATA/" 2>/dev/null || true
     fi
     rm -rf /var/lib/wazuh-indexer/data
 fi
 
-# Create parent directory and symlink
+# Create parent directory
 mkdir -p /var/lib/wazuh-indexer
-if [ ! -L "/var/lib/wazuh-indexer/data" ]; then
+
+# Remove broken symlink if it exists
+if [ -L "/var/lib/wazuh-indexer/data" ] && [ ! -e "/var/lib/wazuh-indexer/data" ]; then
+    echo "Removing broken symlink..."
+    rm -f /var/lib/wazuh-indexer/data
+fi
+
+# Create symlink only if it doesn't exist
+if [ ! -e "/var/lib/wazuh-indexer/data" ]; then
     ln -sf "$INDEXER_PERSISTENT_DATA" /var/lib/wazuh-indexer/data
     echo "✓ Indexer data directory symlinked to persistent volume"
 fi
 
+# CRITICAL: Verify symlink is valid and points to a directory
+if [ -L "/var/lib/wazuh-indexer/data" ]; then
+    LINK_TARGET=$(readlink -f /var/lib/wazuh-indexer/data 2>/dev/null || readlink /var/lib/wazuh-indexer/data)
+    if [ ! -d "$LINK_TARGET" ]; then
+        echo "ERROR: Symlink target is not a directory: $LINK_TARGET"
+        echo "Removing broken symlink and creating directory..."
+        rm -f /var/lib/wazuh-indexer/data
+        mkdir -p "$INDEXER_PERSISTENT_DATA"
+        ln -sf "$INDEXER_PERSISTENT_DATA" /var/lib/wazuh-indexer/data
+    fi
+fi
+
+# Set permissions on symlink target (important for Indexer access)
+chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
+chmod -R 755 "$INDEXER_PERSISTENT_DATA"
+
 # Create logs directory (logs don't need persistence)
 mkdir -p /var/lib/wazuh-indexer/logs
 mkdir -p /var/log/wazuh-indexer
-chown -R wazuh-indexer:wazuh-indexer /var/lib/wazuh-indexer
-chown -R wazuh-indexer:wazuh-indexer /var/log/wazuh-indexer
+chown -R wazuh-indexer:wazuh-indexer /var/lib/wazuh-indexer 2>/dev/null || true
+chown -R wazuh-indexer:wazuh-indexer /var/log/wazuh-indexer 2>/dev/null || true
 chmod -R 755 /var/lib/wazuh-indexer
 chmod -R 755 /var/log/wazuh-indexer
 
-# Verify symlink
+# Verify symlink is valid and points to a directory
 if [ -L "/var/lib/wazuh-indexer/data" ]; then
-    LINK_TARGET=$(readlink -f /var/lib/wazuh-indexer/data)
-    echo "✓ Indexer data persisted at: $LINK_TARGET"
+    LINK_TARGET=$(readlink -f /var/lib/wazuh-indexer/data 2>/dev/null || readlink /var/lib/wazuh-indexer/data)
+    if [ -d "$LINK_TARGET" ]; then
+        echo "✓ Indexer data persisted at: $LINK_TARGET"
+    else
+        echo "ERROR: Symlink target is not a directory: $LINK_TARGET"
+        exit 1
+    fi
+elif [ -d "/var/lib/wazuh-indexer/data" ]; then
+    echo "⚠️ Warning: Indexer data is a directory, not a symlink - data may not persist!"
 else
-    echo "⚠️ Warning: Indexer data symlink not created - data may not persist!"
+    echo "ERROR: Indexer data directory does not exist!"
+    exit 1
 fi
 
 # ============================================================================
