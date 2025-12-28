@@ -21,34 +21,32 @@ kill_timeout = "30s"
 [experimental]
   auto_rollback = true
 
-# Modern Fly.io http_service configuration
-# Dashboard is the main service exposed (port 5601)
+# Dashboard exposed on port 443 (HTTPS) -> internal port 5601
+# Using [[services]] format for TCP health check support
 # Manager API (port 55000) accessible via Fly.io internal networking
-# Core app should use: https://ai2-wazuh.internal:55000
-[http_service]
-  internal_port = 5601        # Dashboard port (main access point)
-  force_https = true
+[[services]]
+  internal_port = 5601
+  protocol = "tcp"
   auto_stop_machines = "off"    # REQUIRED: Indexer needs 10+ min to start
-  auto_start_machines = true    # Auto-start on request
-  min_machines_running = 0      # Cost: no minimum
+  auto_start_machines = true
+  min_machines_running = 0
   processes = ["wazuh"]
-  # NOTE: Manually stop with: fly machine stop <machine-id> -a ai2-wazuh
-  # Manually start with: fly machine start <machine-id> -a ai2-wazuh
 
-  # Health check DISABLED for cost-optimized cold start deployment
-  # Reason: Indexer takes 6+ minutes to start on shared CPU
-  # Dashboard returns 302 redirect (not 200) which fails HTTP checks
-  # Without health checks, traffic routes as soon as machine starts
-  # Cold start time: ~6-8 minutes (user sees loading until ready)
-  # 
-  # To enable health checks, uncomment below:
-  # [[http_service.checks]]
-  #   interval = "60s"
-  #   timeout = "30s"
-  #   grace_period = "60s"
-  #   method = "get"
-  #   path = "/"
-  #   protocol = "http"
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  # TCP health check - just checks if port 5601 is open
+  # Much more lenient than HTTP checks
+  [[services.tcp_checks]]
+    grace_period = "5m"         # 5 minutes grace for Indexer startup
+    interval = "30s"
+    timeout = "10s"
 
 # Note: Manager API (port 55000) is accessible via Fly.io internal networking
 # Other apps in same organization can access: https://ai2-wazuh.internal:55000
