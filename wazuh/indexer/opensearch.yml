@@ -15,12 +15,21 @@ http.port: 9200
 # Discovery settings for single node
 discovery.type: single-node
 
-# Security settings (disabled for single-node localhost setup)
-plugins.security.disabled: true
-# For production, enable security with certificates
-# plugins.security.ssl.transport.pemcert_filepath: /etc/wazuh-indexer/certs/wazuh-indexer.pem
-# plugins.security.ssl.transport.pemkey_filepath: /etc/wazuh-indexer/certs/wazuh-indexer-key.pem
-# plugins.security.ssl.transport.pemtrustedcas_filepath: /etc/wazuh-indexer/certs/root-ca.pem
+# Security settings - ENABLED for Dashboard authentication
+# Using demo certificates (allowed by OpenSearch for development)
+plugins.security.disabled: false
+plugins.security.allow_unsafe_democertificates: true
+plugins.security.allow_default_init_securityindex: true
+plugins.security.check_snapshot_restore_privilege: true
+plugins.security.enable_snapshot_restore_privilege: true
+plugins.security.ssl.http.enabled: false
+plugins.security.ssl.transport.enforce_hostname_verification: false
+plugins.security.ssl.transport.resolve_hostname: false
+plugins.security.authcz.admin_dn: []
+plugins.security.audit.type: internal_opensearch
+plugins.security.restapi.roles_enabled: ["all_access", "security_rest_api_access"]
+plugins.security.system_indices.enabled: true
+plugins.security.system_indices.indices: [".plugins-ml-config", ".plugins-ml-connector", ".plugins-ml-model", ".plugins-ml-task", ".opendistro-alerting-config", ".opendistro-alerting-alert*", ".opendistro-anomaly-detector*", ".opendistro-reports-*", ".opensearch-notifications-*", ".opensearch-notifications-core"]
 
 # Performance settings for Fly.io (4GB RAM)
 bootstrap.memory_lock: false
