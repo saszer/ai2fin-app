@@ -41,13 +41,21 @@ kill_timeout = "30s"
     handlers = ["http"]
     force_https = true
 
-  # TCP health check - just checks if port 5601 is open
-  # NOTE: Fly.io limits grace_period to max 1 minute for TCP checks
-  # Indexer takes 10+ min to start, so we use longer interval instead
-  [[services.tcp_checks]]
+  # HTTP health check - accepts redirects (Dashboard redirects / to /app/login)
+  # Dashboard takes 12-17 minutes to fully start (Indexer: 10-15min + Dashboard: 1-2min)
+  # NOTE: Fly.io caps grace_period at 1 minute - health check will fail initially
+  # Once Dashboard is ready (after 12-17 min), health check will pass
+  [[services.http_checks]]
     grace_period = "1m"         # Max allowed by Fly.io
-    interval = "60s"            # Check every minute (less aggressive)
-    timeout = "30s"             # Allow 30s timeout
+    interval = "30s"            # Check every 30 seconds
+    timeout = "10s"             # 10 second timeout
+    method = "GET"
+    path = "/"
+    protocol = "http"
+    tls_skip_verify = false
+    # Accept redirects (301, 302) as healthy - Dashboard redirects to /app/login
+    # Also accept 200 OK if Dashboard is fully ready
+    success_codes = [200, 301, 302, 303, 307, 308]
 
 # Note: Manager API (port 55000) is accessible via Fly.io internal networking
 # Other apps in same organization can access: https://ai2-wazuh.internal:55000
