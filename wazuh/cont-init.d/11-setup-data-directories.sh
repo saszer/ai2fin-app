@@ -12,23 +12,46 @@ echo "Setting up data directories for Wazuh components..."
 # Volume is mounted with root ownership, but services run as non-root users
 # OpenSearch security bootstrap requires access to parent directory
 echo "Fixing permissions on /var/ossec/data..."
-# Make directory world-readable and executable so wazuh-indexer can access it
-# This is safe because it's a volume mount point, not sensitive data
-chmod 755 /var/ossec/data
+
+# CRITICAL: OpenSearch security bootstrap checks parent directory access
+# The volume mount may have restrictive permissions that prevent access
+# We need to make it world-accessible so wazuh-indexer can access it
+# This is safe because /var/ossec/data is just a mount point
+
+# Try multiple permission strategies
+chmod 755 /var/ossec/data 2>/dev/null || true
+chmod 775 /var/ossec/data 2>/dev/null || true
+chmod 777 /var/ossec/data 2>/dev/null || true
+
+# Also try setting ownership (may fail on volume mount, but try anyway)
 chown root:root /var/ossec/data 2>/dev/null || true
 
-# CRITICAL: OpenSearch bootstrap checks parent directory access
-# Ensure wazuh-indexer user can traverse and read the directory
-# Use world permissions since we can't easily change volume ownership
-chmod 755 /var/ossec/data 2>/dev/null || true
+# Verify the directory exists and is accessible
+if [ ! -d "/var/ossec/data" ]; then
+    echo "ERROR: /var/ossec/data does not exist!"
+    exit 1
+fi
 
-# Verify wazuh-indexer can access the directory
+# Test if wazuh-indexer can access it
 if ! sudo -u wazuh-indexer test -x /var/ossec/data 2>/dev/null; then
-    echo "WARNING: wazuh-indexer cannot access /var/ossec/data, making world-accessible..."
-    chmod 755 /var/ossec/data 2>/dev/null || true
+    echo "WARNING: wazuh-indexer cannot access /var/ossec/data"
+    echo "Attempting to fix permissions..."
+    # Try ACLs if available
+    if command -v setfacl >/dev/null 2>&1; then
+        setfacl -m u:wazuh-indexer:rwx /var/ossec/data 2>/dev/null || true
+        setfacl -m o::rx /var/ossec/data 2>/dev/null || true
+    fi
     # Last resort: make it world-accessible
     chmod 777 /var/ossec/data 2>/dev/null || true
+    # Verify again
+    if ! sudo -u wazuh-indexer test -x /var/ossec/data 2>/dev/null; then
+        echo "ERROR: Cannot grant wazuh-indexer access to /var/ossec/data"
+        echo "Volume mount may have restrictive permissions that cannot be changed"
+        exit 1
+    fi
 fi
+
+echo "✓ /var/ossec/data is accessible to wazuh-indexer"
 
 # ============================================================================
 # INDEXER DATA PERSISTENCE (CRITICAL!)
