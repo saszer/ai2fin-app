@@ -9,11 +9,14 @@
 server.host: 0.0.0.0
 server.port: 5601
 
-# OpenSearch connection
+# OpenSearch connection with authentication
 opensearch.hosts: ["http://localhost:9200"]
 opensearch.ssl.verificationMode: none
-opensearch.username: admin
-opensearch.password: admin
+
+# Admin credentials for Dashboard-to-Indexer connection
+# Password can be customized via OPENSEARCH_INITIAL_ADMIN_PASSWORD secret
+opensearch.username: "admin"
+opensearch.password: "${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}"
 
 # Performance settings - increased timeouts for stability
 opensearch.shardTimeout: 60000
