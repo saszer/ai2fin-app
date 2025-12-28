@@ -16,25 +16,27 @@ if [ "$INDEXER_ENABLED" = "0" ]; then
 fi
 
 # Fix indexer temp directory permissions
-INDEXER_TMP="/var/ossec/data/wazuh-indexer-tmp"
+# CRITICAL: Use /tmp instead of volume - Fly.io volumes don't support user switching
+# Volume mounts have restrictions that prevent sudo -u from working
+INDEXER_TMP="/tmp/wazuh-indexer-tmp"
 INDEXER_DATA="/var/ossec/data/wazuh-indexer-data"
 
-# Ensure parent directory is writable
-chmod 777 /var/ossec/data 2>/dev/null || true
+# Use /tmp for temp directory (not on volume - supports user switching)
+# Fly.io volume mounts don't support sudo -u, so we use /tmp instead
+echo "Using /tmp for indexer temp directory (volume mounts don't support user switching)"
 
-# Create and fix temp directory
-if [ ! -d "$INDEXER_TMP" ]; then
-    mkdir -p "$INDEXER_TMP"
-fi
+# Create temp directory in /tmp (not on volume)
+mkdir -p "$INDEXER_TMP"
+chmod 777 "$INDEXER_TMP"
+chown wazuh-indexer:wazuh-indexer "$INDEXER_TMP" 2>/dev/null || true
 
-# Use multiple methods to fix permissions
-chmod -R 777 "$INDEXER_TMP" 2>/dev/null || true
-chown -R wazuh-indexer:wazuh-indexer "$INDEXER_TMP" 2>/dev/null || true
-
-# Try using setfacl if available (better for volume mounts)
-if command -v setfacl >/dev/null 2>&1; then
-    setfacl -R -m u:wazuh-indexer:rwx "$INDEXER_TMP" 2>/dev/null || true
-    setfacl -R -m g:wazuh-indexer:rwx "$INDEXER_TMP" 2>/dev/null || true
+# Verify write access (should work on /tmp)
+if sudo -u wazuh-indexer test -w "$INDEXER_TMP" 2>/dev/null; then
+    echo "✓ wazuh-indexer can write to /tmp temp directory"
+else
+    echo "⚠ Still can't write - trying alternative approach..."
+    # Fallback: make it world-writable
+    chmod 777 "$INDEXER_TMP"
 fi
 
 # Create and fix data directory
@@ -44,25 +46,9 @@ fi
 chmod -R 777 "$INDEXER_DATA" 2>/dev/null || true
 chown -R wazuh-indexer:wazuh-indexer "$INDEXER_DATA" 2>/dev/null || true
 
-# Fix parent directory permissions (critical for volume mounts)
+# Ensure data directory on volume is accessible
 chmod 777 /var/ossec/data 2>/dev/null || true
 chown root:root /var/ossec/data 2>/dev/null || true
-
-# Remove and recreate temp directory to clear any mount issues
-if [ -d "$INDEXER_TMP" ]; then
-    rm -rf "$INDEXER_TMP" 2>/dev/null || true
-fi
-mkdir -p "$INDEXER_TMP"
-chmod 777 "$INDEXER_TMP"
-chown wazuh-indexer:wazuh-indexer "$INDEXER_TMP"
-
-# Use ACLs if available (better for volume mounts)
-if command -v setfacl >/dev/null 2>&1; then
-    setfacl -R -m u:wazuh-indexer:rwx "$INDEXER_TMP" 2>/dev/null || true
-    setfacl -R -m g:wazuh-indexer:rwx "$INDEXER_TMP" 2>/dev/null || true
-    setfacl -R -m d:u:wazuh-indexer:rwx "$INDEXER_TMP" 2>/dev/null || true
-    setfacl -R -m d:g:wazuh-indexer:rwx "$INDEXER_TMP" 2>/dev/null || true
-fi
 
 # Verify write access
 if sudo -u wazuh-indexer test -w "$INDEXER_TMP" 2>/dev/null; then
