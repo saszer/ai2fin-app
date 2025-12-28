@@ -138,3 +138,4 @@ strace -p $(pgrep wazuh-apid) -e trace=bind 2>&1 | grep 55000
 
 **embracingearth.space**
 
+

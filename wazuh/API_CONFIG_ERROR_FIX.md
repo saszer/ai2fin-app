@@ -100,3 +100,4 @@ According to [Wazuh 4.8 Documentation](https://documentation.wazuh.com/4.8/user-
 
 **embracingearth.space**
 
+

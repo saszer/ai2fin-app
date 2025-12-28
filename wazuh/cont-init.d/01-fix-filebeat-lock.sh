@@ -26,3 +26,4 @@ chmod 755 "$FILEBEAT_DATA_DIR"
 
 echo "Filebeat lock cleanup completed."
 
+
