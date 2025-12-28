@@ -28,23 +28,25 @@ kill_timeout = "30s"
 [http_service]
   internal_port = 5601        # Dashboard port (main access point)
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = "suspend"  # Use suspend instead of stop for faster wake
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1    # Keep at least 1 running to avoid cold starts
   processes = ["wazuh"]
 
   # Health check for Dashboard
-  # Note: Dashboard takes 2-3 minutes to fully start (Indexer needs 1-2 min, Dashboard needs 1-2 min)
-  # Init scripts wait for services, but health checks should be lenient
+  # CRITICAL: Indexer takes 6+ minutes to fully initialize on shared CPU
+  # Dashboard's /api/status returns 401 (requires auth)
+  # Root path returns 302 (redirect), which Fly.io health check doesn't follow
+  # Solution: Accept 3xx responses as healthy
   [[http_service.checks]]
-    interval = "60s"          # Check every 60 seconds (less aggressive)
-    timeout = "15s"           # Allow 15s for response (Dashboard can be slow to respond)
-    grace_period = "60s"      # Maximum allowed by Fly.io (services should be ready via init scripts)
+    interval = "60s"          # Check every minute
+    timeout = "30s"           # Allow 30s for response
+    grace_period = "60s"      # Maximum allowed by Fly.io
     method = "get"
-    path = "/api/status"       # Dashboard health endpoint
+    path = "/"                # Root path returns 302 redirect when ready
     protocol = "http"
-    # Tolerate failures initially while services are starting
-    tls_skip_verify = false
+    # CRITICAL: Accept 3xx redirects as healthy responses
+    success_codes = [200, 301, 302, 303, 307, 308]
 
 # Note: Manager API (port 55000) is accessible via Fly.io internal networking
 # Other apps in same organization can access: https://ai2-wazuh.internal:55000
