@@ -26,6 +26,21 @@ echo "Setting up Indexer data persistence..."
 # Create persistent Indexer data directory on volume
 INDEXER_PERSISTENT_DATA="/var/ossec/data/wazuh-indexer-data"
 mkdir -p "$INDEXER_PERSISTENT_DATA"
+
+# CRITICAL: If security was previously disabled and now enabled, clear security index
+# Security index from non-secured Indexer is incompatible with secured Indexer
+if [ -d "$INDEXER_PERSISTENT_DATA/nodes" ]; then
+    # Check if security index exists (from previous non-secured run)
+    if [ -d "$INDEXER_PERSISTENT_DATA/nodes/0/indices" ]; then
+        SECURITY_INDEX=$(find "$INDEXER_PERSISTENT_DATA/nodes/0/indices" -name ".opensearch_security" -type d 2>/dev/null | head -1)
+        if [ -n "$SECURITY_INDEX" ]; then
+            echo "⚠️ Found existing security index from previous run"
+            echo "⚠️ Removing incompatible security index (will be recreated with security enabled)..."
+            rm -rf "$SECURITY_INDEX" 2>/dev/null || true
+        fi
+    fi
+fi
+
 chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
 chmod -R 755 "$INDEXER_PERSISTENT_DATA"
 
