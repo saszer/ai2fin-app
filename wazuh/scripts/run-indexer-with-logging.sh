@@ -27,11 +27,13 @@ mkdir -p /var/ossec/data/wazuh-indexer-data
 chmod -R 777 /var/ossec/data/wazuh-indexer-data 2>/dev/null || true
 chown -R wazuh-indexer:wazuh-indexer /var/ossec/data/wazuh-indexer-data 2>/dev/null || true
 
-# CRITICAL: Create temp directory on volume (has more space than /tmp)
+# CRITICAL: Use /tmp for temp directory - Fly.io volumes don't support user switching
+# Volume mounts have restrictions that prevent sudo -u from working
+# /tmp is on root filesystem and supports user switching properly
 # OpenSearch uses temp directory for JVM and other operations
 # Must be created BEFORE OpenSearch starts, and must be accessible to wazuh-indexer user
-TEMP_DIR="/var/ossec/data/wazuh-indexer-tmp"
-echo "Creating/verifying temp directory on volume: $TEMP_DIR"
+TEMP_DIR="/tmp/wazuh-indexer-tmp"
+echo "Creating/verifying temp directory in /tmp (volume mounts don't support user switching): $TEMP_DIR"
 mkdir -p "$TEMP_DIR"
 chmod -R 777 "$TEMP_DIR" 2>/dev/null || true
 chown -R wazuh-indexer:wazuh-indexer "$TEMP_DIR" 2>/dev/null || true

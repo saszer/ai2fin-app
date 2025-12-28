@@ -133,10 +133,12 @@ fi
 # Create the directory if it doesn't exist
 mkdir -p "$INDEXER_PERSISTENT_DATA"
 
-# CRITICAL: Create temp directory EARLY (OpenSearch checks it on startup)
-# OpenSearch uses temp directory for JVM operations and can run out of space on /tmp
-TEMP_DIR="/var/ossec/data/wazuh-indexer-tmp"
-echo "Creating temp directory on volume: $TEMP_DIR"
+# CRITICAL: Use /tmp for temp directory - Fly.io volumes don't support user switching
+# Volume mounts have restrictions that prevent sudo -u from working
+# /tmp is on root filesystem and supports user switching properly
+# OpenSearch uses temp directory for JVM operations
+TEMP_DIR="/tmp/wazuh-indexer-tmp"
+echo "Creating temp directory in /tmp (volume mounts don't support user switching): $TEMP_DIR"
 mkdir -p "$TEMP_DIR"
 chown -R wazuh-indexer:wazuh-indexer "$TEMP_DIR" 2>/dev/null || true
 chmod -R 777 "$TEMP_DIR" 2>/dev/null || true
