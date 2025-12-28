@@ -66,6 +66,12 @@ COPY cont-init.d/ /etc/cont-init.d/
 RUN find /etc/cont-init.d/ -name "*.sh" -type f -exec sed -i 's/\r$//' {} \; && \
     chmod +x /etc/cont-init.d/*.sh 2>/dev/null || true
 
+# Copy helper scripts
+COPY scripts/ /etc/cont-init.d/scripts/
+RUN mkdir -p /etc/cont-init.d/scripts && \
+    find /etc/cont-init.d/scripts/ -name "*.sh" -type f -exec sed -i 's/\r$//' {} \; && \
+    chmod +x /etc/cont-init.d/scripts/*.sh 2>/dev/null || true
+
 # Create log directories
 RUN mkdir -p /var/log/supervisor && \
     mkdir -p /var/log/wazuh-indexer && \
