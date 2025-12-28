@@ -8,15 +8,42 @@ set -x  # Debug mode to see all commands
 
 # CRITICAL: Fix permissions before starting Indexer
 # OpenSearch security bootstrap needs access to parent directories
+# Volume mounts may have restrictive permissions - we need to ensure access
 echo "=== Pre-startup Permission Fix ==="
 echo "Current user: $(whoami)"
+
+# Ensure parent directory is accessible (volume mount may have restrictive permissions)
 echo "Fixing /var/ossec/data permissions..."
 chmod 777 /var/ossec/data 2>/dev/null || true
+# Try ACLs if available
+if command -v setfacl >/dev/null 2>&1; then
+    setfacl -m u:wazuh-indexer:rwx /var/ossec/data 2>/dev/null || true
+    setfacl -m o::rwx /var/ossec/data 2>/dev/null || true
+fi
+
+# Ensure data directory exists and is accessible
+echo "Creating and fixing /var/ossec/data/wazuh-indexer-data permissions..."
+mkdir -p /var/ossec/data/wazuh-indexer-data
 chmod -R 777 /var/ossec/data/wazuh-indexer-data 2>/dev/null || true
 chown -R wazuh-indexer:wazuh-indexer /var/ossec/data/wazuh-indexer-data 2>/dev/null || true
+
+# Verify permissions
 echo "Verifying permissions..."
 ls -ld /var/ossec/data
-ls -ld /var/ossec/data/wazuh-indexer-data 2>/dev/null || echo "Data directory does not exist yet"
+ls -ld /var/ossec/data/wazuh-indexer-data 2>/dev/null || echo "WARNING: Data directory does not exist"
+
+# Test access as wazuh-indexer user
+if sudo -u wazuh-indexer test -x /var/ossec/data 2>/dev/null; then
+    echo "✓ wazuh-indexer can access /var/ossec/data"
+else
+    echo "⚠ WARNING: wazuh-indexer cannot access /var/ossec/data (volume mount restrictions?)"
+fi
+
+if sudo -u wazuh-indexer test -w /var/ossec/data/wazuh-indexer-data 2>/dev/null; then
+    echo "✓ wazuh-indexer can write to data directory"
+else
+    echo "⚠ WARNING: wazuh-indexer cannot write to data directory"
+fi
 
 # Switch to wazuh-indexer user for running Indexer
 # But ensure permissions are set first
