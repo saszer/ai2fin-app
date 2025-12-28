@@ -33,15 +33,20 @@ kill_timeout = "30s"
   min_machines_running = 0      # Cost optimization: no minimum
   processes = ["wazuh"]
 
-  # Health check for Dashboard
-  # NOTE: Cold starts take 6-8 minutes (Indexer initialization is slow)
-  # Dashboard returns 302 redirect on root path, not 200
-  # Using TCP check since HTTP checks don't support success_codes in Fly.io
-  [[http_service.checks]]
-    interval = "60s"          # Check every minute
-    timeout = "30s"           # Allow 30s for response
-    grace_period = "60s"      # Maximum allowed by Fly.io
-    protocol = "tcp"          # TCP check: just verify port 5601 is open
+  # Health check DISABLED for cost-optimized cold start deployment
+  # Reason: Indexer takes 6+ minutes to start on shared CPU
+  # Dashboard returns 302 redirect (not 200) which fails HTTP checks
+  # Without health checks, traffic routes as soon as machine starts
+  # Cold start time: ~6-8 minutes (user sees loading until ready)
+  # 
+  # To enable health checks, uncomment below:
+  # [[http_service.checks]]
+  #   interval = "60s"
+  #   timeout = "30s"
+  #   grace_period = "60s"
+  #   method = "get"
+  #   path = "/"
+  #   protocol = "http"
 
 # Note: Manager API (port 55000) is accessible via Fly.io internal networking
 # Other apps in same organization can access: https://ai2-wazuh.internal:55000
