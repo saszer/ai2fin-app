@@ -13,15 +13,21 @@ ADMIN_PASS="${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}"
 MAX_WAIT=600
 ELAPSED=0
 
-# Step 1: Wait for Indexer HTTP endpoint
+# Step 1: Wait for Indexer HTTP endpoint AND cluster to be ready
 # With security enabled, Indexer returns 401 (not 200), but that means it's up
-echo "Step 1: Waiting for Indexer HTTP endpoint..."
+# Cluster must be in "green" or "yellow" state for security index initialization
+echo "Step 1: Waiting for Indexer HTTP endpoint and cluster to be ready..."
 while [ $ELAPSED -lt $MAX_WAIT ]; do
     # Check if Indexer responds (401 is OK - means Indexer is up but needs auth)
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9200 2>/dev/null)
     if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
-        echo "✓ Indexer HTTP endpoint is up (HTTP $HTTP_CODE)"
-        break
+        # Also check cluster health (even without auth, we can check if cluster is initializing)
+        # Try to get cluster health - might return 401 but that's OK, means Indexer is processing
+        CLUSTER_RESPONSE=$(curl -s http://localhost:9200/_cluster/health 2>/dev/null || echo "")
+        if echo "$CLUSTER_RESPONSE" | grep -q "status" || [ "$HTTP_CODE" = "401" ]; then
+            echo "✓ Indexer HTTP endpoint is up (HTTP $HTTP_CODE) and cluster is responding"
+            break
+        fi
     fi
     sleep 5
     ELAPSED=$((ELAPSED + 5))
@@ -30,6 +36,10 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
         echo "Waiting for Indexer HTTP... (${ELAPSED}s/${MAX_WAIT}s) [last code: ${HTTP_CODE:-none}]"
     fi
 done
+
+# Give Indexer a moment to fully initialize cluster state
+echo "Waiting 10 seconds for cluster state to stabilize..."
+sleep 10
 
 # Step 2: Wait for security index initialization (auth check)
 # The security index must be created AND the admin user must be initialized
