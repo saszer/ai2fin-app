@@ -61,7 +61,7 @@ plugins.security.system_indices.indices: [
 
 # Enable snapshot/restore privileges
 plugins.security.enable_snapshot_restore_privilege: true
-plugins.security.check_snapshot_restore_privilege: true
+plugins.security.check_snapshot_restore_write_privileges: true
 
 # Performance settings for Fly.io (4GB RAM)
 bootstrap.memory_lock: false
