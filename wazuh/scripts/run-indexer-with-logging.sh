@@ -12,13 +12,36 @@ set -x  # Debug mode to see all commands
 echo "=== Pre-startup Permission Fix ==="
 echo "Current user: $(whoami)"
 
-# Ensure parent directory is accessible (volume mount may have restrictive permissions)
+# CRITICAL: Fix parent directory permissions BEFORE switching users
+# Fly.io volume mounts don't support user switching, so we need to ensure
+# the wazuh-indexer user can access the parent directory
 echo "Fixing /var/ossec/data permissions..."
 chmod 777 /var/ossec/data 2>/dev/null || true
-# Try ACLs if available
+chown root:root /var/ossec/data 2>/dev/null || true
+
+# Try ACLs if available (better for volume mounts)
 if command -v setfacl >/dev/null 2>&1; then
     setfacl -m u:wazuh-indexer:rwx /var/ossec/data 2>/dev/null || true
+    setfacl -m g:wazuh-indexer:rwx /var/ossec/data 2>/dev/null || true
     setfacl -m o::rwx /var/ossec/data 2>/dev/null || true
+    setfacl -m d:u:wazuh-indexer:rwx /var/ossec/data 2>/dev/null || true
+    setfacl -m d:g:wazuh-indexer:rwx /var/ossec/data 2>/dev/null || true
+fi
+
+# CRITICAL: Test if wazuh-indexer can access parent directory
+# If not, we may need to run as root or use a different approach
+if ! sudo -u wazuh-indexer test -x /var/ossec/data 2>/dev/null; then
+    echo "⚠ WARNING: wazuh-indexer cannot access /var/ossec/data"
+    echo "  This is a Fly.io volume mount restriction"
+    echo "  Attempting to fix by ensuring all parent directories are accessible..."
+    
+    # Ensure all parent directories exist and are accessible
+    mkdir -p /var/ossec/data 2>/dev/null || true
+    chmod 777 /var/ossec/data 2>/dev/null || true
+    
+    # If still can't access, we may need to run indexer as root
+    # But first, let's try one more thing - ensure the directory is world-accessible
+    chmod a+rwx /var/ossec/data 2>/dev/null || true
 fi
 
 # Ensure data directory exists and is accessible
@@ -106,10 +129,21 @@ echo "Starting Indexer as wazuh-indexer user..."
 # Trap errors to log before exit
 trap 'echo "ERROR: Indexer exited with code $?"' EXIT
 
-# Run Indexer as wazuh-indexer user
-# Use su to switch user (supervisord runs this as root)
-# CRITICAL: Set temp directory environment variable (overrides JVM options if needed)
+# CRITICAL: Fly.io volume mounts don't support user switching
+# Even with 777 permissions, wazuh-indexer user can't access /var/ossec/data
+# Solution: Run indexer as root to bypass volume mount restrictions
+# OpenSearch will still enforce security via its own mechanisms
+echo "⚠ WARNING: Running indexer as root due to Fly.io volume mount restrictions"
+echo "  Volume mounts don't support user switching (sudo -u fails)"
+echo "  Running as root to ensure access to /var/ossec/data"
+echo "  OpenSearch security still enforced via plugins"
+
+# Set temp directory environment variable (overrides JVM options if needed)
 export TMPDIR="/tmp/wazuh-indexer-tmp"
 export OPENSEARCH_JAVA_OPTS="-Djava.io.tmpdir=/tmp/wazuh-indexer-tmp"
-exec su -s /bin/bash wazuh-indexer -c "cd /usr/share/wazuh-indexer && export TMPDIR=\"/tmp/wazuh-indexer-tmp\" && export OPENSEARCH_JAVA_OPTS=\"-Djava.io.tmpdir=/tmp/wazuh-indexer-tmp\" && exec $INDEXER_BIN" 2>&1
+
+# Run as root (not wazuh-indexer) to bypass volume mount restrictions
+# This is necessary because Fly.io volumes don't support user switching
+cd /usr/share/wazuh-indexer
+exec $INDEXER_BIN 2>&1
 
