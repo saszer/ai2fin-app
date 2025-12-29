@@ -37,31 +37,37 @@ done
 ELAPSED=0
 echo "Step 2: Waiting for security index initialization (admin user creation)..."
 while [ $ELAPSED -lt $MAX_WAIT ]; do
-    # Check if security index exists first
-    if curl -s -f http://localhost:9200/.opendistro_security > /dev/null 2>&1; then
-        # Security index exists, now check if admin user is ready
-        # Try to authenticate - if successful, admin user exists
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -u admin:"$ADMIN_PASS" http://localhost:9200/_cluster/health 2>/dev/null)
-        if [ "$HTTP_CODE" = "200" ]; then
-            echo "✓ Security index initialized - admin user exists and is ready"
-            break
-        elif [ "$HTTP_CODE" = "401" ]; then
-            # 401 means security is enabled but credentials are wrong
-            # This shouldn't happen with default password, but log it
-            echo "⚠ Security enabled but authentication failed (HTTP $HTTP_CODE) - waiting..."
+    # Try to authenticate - if successful (200), admin user exists and security index is ready
+    # 401 means security is enabled but credentials might be wrong or user not ready yet
+    # Other codes mean Indexer might still be starting
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -u admin:"$ADMIN_PASS" http://localhost:9200/_cluster/health 2>/dev/null)
+    
+    if [ "$HTTP_CODE" = "200" ]; then
+        echo "✓ Security index initialized - admin user exists and is ready"
+        break
+    elif [ "$HTTP_CODE" = "401" ]; then
+        # 401 means security is enabled but authentication failed
+        # This could mean:
+        # 1. Security index exists but admin user not created yet (still initializing)
+        # 2. Password is wrong (shouldn't happen with default)
+        # Check if security index exists (401 on index check means it exists)
+        INDEX_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9200/.opendistro_security 2>/dev/null)
+        if [ "$INDEX_CHECK" = "401" ] || [ "$INDEX_CHECK" = "200" ]; then
+            # Security index exists (401 or 200 both mean it exists)
+            echo "⚠ Security index exists but admin user not ready yet (HTTP $HTTP_CODE) - waiting..."
         else
-            # Other errors - security might still be initializing
-            echo "⚠ Security index exists but not ready yet (HTTP $HTTP_CODE) - waiting..."
+            # Security index doesn't exist yet
+            echo "⚠ Security index not created yet (index check: $INDEX_CHECK) - waiting..."
         fi
     else
-        # Security index doesn't exist yet
-        echo "⚠ Security index not created yet - waiting..."
+        # Other errors - Indexer might still be starting
+        echo "⚠ Indexer not ready yet (HTTP $HTTP_CODE) - waiting..."
     fi
     sleep 10
     ELAPSED=$((ELAPSED + 10))
     # Log every 30 seconds
     if [ $((ELAPSED % 30)) -eq 0 ]; then
-        echo "Waiting for security index... (${ELAPSED}s/${MAX_WAIT}s)"
+        echo "Waiting for security index... (${ELAPSED}s/${MAX_WAIT}s) [auth: $HTTP_CODE]"
     fi
 done
 
