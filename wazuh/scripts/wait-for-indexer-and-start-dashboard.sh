@@ -29,12 +29,30 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
 done
 
 # Step 2: Wait for security index initialization (auth check)
+# The security index must be created AND the admin user must be initialized
+# allow_default_init_securityindex: true creates admin user, but it takes time
 ELAPSED=0
 echo "Step 2: Waiting for security index initialization (admin user creation)..."
 while [ $ELAPSED -lt $MAX_WAIT ]; do
-    if curl -s -f -u admin:"$ADMIN_PASS" http://localhost:9200/_cluster/health > /dev/null 2>&1; then
-        echo "✓ Security index initialized - admin user exists"
-        break
+    # Check if security index exists first
+    if curl -s -f http://localhost:9200/.opendistro_security > /dev/null 2>&1; then
+        # Security index exists, now check if admin user is ready
+        # Try to authenticate - if successful, admin user exists
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -u admin:"$ADMIN_PASS" http://localhost:9200/_cluster/health 2>/dev/null)
+        if [ "$HTTP_CODE" = "200" ]; then
+            echo "✓ Security index initialized - admin user exists and is ready"
+            break
+        elif [ "$HTTP_CODE" = "401" ]; then
+            # 401 means security is enabled but credentials are wrong
+            # This shouldn't happen with default password, but log it
+            echo "⚠ Security enabled but authentication failed (HTTP $HTTP_CODE) - waiting..."
+        else
+            # Other errors - security might still be initializing
+            echo "⚠ Security index exists but not ready yet (HTTP $HTTP_CODE) - waiting..."
+        fi
+    else
+        # Security index doesn't exist yet
+        echo "⚠ Security index not created yet - waiting..."
     fi
     sleep 10
     ELAPSED=$((ELAPSED + 10))
@@ -44,7 +62,9 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
     fi
 done
 
+# Give Indexer a moment to fully initialize after security index is ready
 sleep 5
+echo "✓ Indexer is ready - security index initialized"
 echo "Starting Wazuh Dashboard..."
 
 # Start Dashboard
