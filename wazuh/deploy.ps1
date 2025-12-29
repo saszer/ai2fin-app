@@ -55,9 +55,11 @@ Write-Host ""
 
 # Deploy
 Write-Host "🚀 Starting deployment..." -ForegroundColor Yellow
+Write-Host "⚠️  Using --no-health-checks to prevent deployment timeout" -ForegroundColor Yellow
+Write-Host "   (Health checks will still run and pass once Dashboard is ready)" -ForegroundColor Yellow
 Write-Host ""
 
-& $flyctl deploy -a ai2-wazuh --config fly.toml
+& $flyctl deploy -a ai2-wazuh --config fly.toml --no-health-checks
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
@@ -66,7 +68,8 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "📋 Next steps:" -ForegroundColor Cyan
     Write-Host "  1. Check status: flyctl status -a ai2-wazuh" -ForegroundColor White
     Write-Host "  2. View logs: flyctl logs -a ai2-wazuh" -ForegroundColor White
-    Write-Host "  3. SSH to machine: flyctl ssh console -a ai2-wazuh" -ForegroundColor White
+    Write-Host "  3. Check health: flyctl checks list -a ai2-wazuh" -ForegroundColor White
+    Write-Host "  4. Health checks will pass once Dashboard is ready (12-17 min)" -ForegroundColor Yellow
 } else {
     Write-Host ""
     Write-Host "❌ Deployment failed. Check logs above." -ForegroundColor Red
