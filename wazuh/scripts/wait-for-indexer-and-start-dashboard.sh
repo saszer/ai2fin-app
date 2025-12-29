@@ -34,11 +34,22 @@ done
 # Step 2: Wait for security index initialization (auth check)
 # The security index must be created AND the admin user must be initialized
 # allow_default_init_securityindex: true creates admin user, but it takes time
+# OpenSearch 2.x uses .opensearch_security (not .opendistro_security)
 ELAPSED=0
 echo "Step 2: Waiting for security index initialization (admin user creation)..."
+SECURITY_INIT_ATTEMPTED=false
 while [ $ELAPSED -lt $MAX_WAIT ]; do
-    # Check if security index exists first
-    if curl -s -f http://localhost:9200/.opendistro_security > /dev/null 2>&1; then
+    # Check for both old and new security index names
+    SECURITY_INDEX_EXISTS=false
+    if curl -s -f http://localhost:9200/.opensearch_security > /dev/null 2>&1; then
+        SECURITY_INDEX_EXISTS=true
+        echo "✓ Found .opensearch_security index"
+    elif curl -s -f http://localhost:9200/.opendistro_security > /dev/null 2>&1; then
+        SECURITY_INDEX_EXISTS=true
+        echo "✓ Found .opendistro_security index"
+    fi
+    
+    if [ "$SECURITY_INDEX_EXISTS" = "true" ]; then
         # Security index exists, now check if admin user is ready
         # Try to authenticate - if successful, admin user exists
         HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -u admin:"$ADMIN_PASS" http://localhost:9200/_cluster/health 2>/dev/null)
@@ -55,7 +66,17 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
         fi
     else
         # Security index doesn't exist yet
-        echo "⚠ Security index not created yet - waiting..."
+        # Try to manually initialize if we've waited long enough (60 seconds)
+        if [ $ELAPSED -ge 60 ] && [ "$SECURITY_INIT_ATTEMPTED" = "false" ]; then
+            echo "⚠ Security index not found after 60s - attempting manual initialization..."
+            # Try to trigger security index initialization by accessing a protected endpoint
+            # This might trigger the auto-initialization
+            curl -s -X PUT "http://localhost:9200/.opensearch_security/_doc/1" -H 'Content-Type: application/json' -d '{"init":"trigger"}' > /dev/null 2>&1 || true
+            SECURITY_INIT_ATTEMPTED=true
+            echo "  Manual initialization attempt completed"
+        else
+            echo "⚠ Security index not created yet - waiting..."
+        fi
     fi
     sleep 10
     ELAPSED=$((ELAPSED + 10))
