@@ -10,7 +10,8 @@ echo "Setting up data directories for Wazuh components..."
 
 # CRITICAL: Fix permissions on volume mount FIRST
 # Volume is mounted with root ownership, but services run as non-root users
-# OpenSearch security bootstrap requires access to parent directory
+# NOTE: Indexer now uses /var/lib/wazuh-indexer/data (not on volume) due to Fly.io restrictions
+# But we still need /var/ossec/data accessible for Manager and other components
 echo "Fixing permissions on /var/ossec/data..."
 
 # CRITICAL: OpenSearch security bootstrap checks parent directory access
@@ -26,6 +27,10 @@ chmod 777 /var/ossec/data 2>/dev/null || true
 # Also try setting ownership (may fail on volume mount, but try anyway)
 chown root:root /var/ossec/data 2>/dev/null || true
 
+# NOTE: wazuh-indexer cannot access /var/ossec/data due to Fly.io volume mount restrictions
+# This is expected and OK - Indexer uses /var/lib/wazuh-indexer/data instead
+# The warning is informational, not an error
+
 # Verify the directory exists and is accessible
 if [ ! -d "/var/ossec/data" ]; then
     echo "ERROR: /var/ossec/data does not exist!"
@@ -33,9 +38,12 @@ if [ ! -d "/var/ossec/data" ]; then
 fi
 
 # Test if wazuh-indexer can access it
+# NOTE: This is expected to fail on Fly.io due to volume mount restrictions
+# Indexer now uses /var/lib/wazuh-indexer/data (not on volume) instead
 if ! sudo -u wazuh-indexer test -x /var/ossec/data 2>/dev/null; then
-    echo "WARNING: wazuh-indexer cannot access /var/ossec/data"
-    echo "Attempting to fix permissions..."
+    echo "WARNING: wazuh-indexer cannot access /var/ossec/data (expected on Fly.io)"
+    echo "  This is OK - Indexer uses /var/lib/wazuh-indexer/data instead"
+    echo "  Attempting to fix permissions anyway (may not work on Fly.io volumes)..."
     # Try ACLs if available
     if command -v setfacl >/dev/null 2>&1; then
         setfacl -m u:wazuh-indexer:rwx /var/ossec/data 2>/dev/null || true
@@ -43,15 +51,11 @@ if ! sudo -u wazuh-indexer test -x /var/ossec/data 2>/dev/null; then
     fi
     # Last resort: make it world-accessible
     chmod 777 /var/ossec/data 2>/dev/null || true
-    # Verify again
-    if ! sudo -u wazuh-indexer test -x /var/ossec/data 2>/dev/null; then
-        echo "ERROR: Cannot grant wazuh-indexer access to /var/ossec/data"
-        echo "Volume mount may have restrictive permissions that cannot be changed"
-        exit 1
-    fi
+    # Don't exit on failure - this is expected on Fly.io
+    # Indexer will use /var/lib/wazuh-indexer/data instead
+else
+    echo "✓ /var/ossec/data is accessible to wazuh-indexer"
 fi
-
-echo "✓ /var/ossec/data is accessible to wazuh-indexer"
 
 # ============================================================================
 # INDEXER DATA PERSISTENCE (CRITICAL!)
