@@ -1,6 +1,6 @@
 # Wazuh Deployment Command Reference
 
-**CRITICAL:** Always include `--no-health-checks` flag to prevent deployment timeout!
+**CRITICAL:** Always include `--detach` flag to prevent deployment timeout!
 
 ---
 
@@ -8,7 +8,7 @@
 
 ### **Option 1: Build from Dockerfile (Recommended)**
 ```bash
-flyctl deploy -a ai2-wazuh --config fly.toml --no-health-checks
+flyctl deploy -a ai2-wazuh --config fly.toml --detach
 ```
 
 ### **Option 2: Use Pre-built Image**
@@ -17,7 +17,7 @@ flyctl deploy -a ai2-wazuh \
   --image registry.fly.io/ai2-wazuh:deployment-XXXXX \
   --depot-scope=app \
   --config fly.toml \
-  --no-health-checks
+  --detach
 ```
 
 ### **Option 3: Use PowerShell Script**
@@ -28,7 +28,7 @@ cd embracingearthspace\wazuh
 
 ---
 
-## ❌ **WRONG - Missing `--no-health-checks`**
+## ❌ **WRONG - Missing `--detach`**
 
 ```bash
 # This will FAIL with timeout error:
@@ -42,7 +42,7 @@ flyctl deploy -a ai2-wazuh --image registry.fly.io/ai2-wazuh:deployment-XXXXX --
 
 ---
 
-## ✅ **Why `--no-health-checks` is Required**
+## ✅ **Why `--detach` is Required**
 
 1. **Dashboard takes 12-17 minutes to start:**
    - Indexer: 10-15 minutes
@@ -52,12 +52,12 @@ flyctl deploy -a ai2-wazuh --image registry.fly.io/ai2-wazuh:deployment-XXXXX --
    - This is expected and normal
    - Health checks will pass once Dashboard is ready
 
-3. **Without `--no-health-checks`:**
+3. **Without `--detach`:**
    - Deployment times out waiting for health checks
    - Deployment fails even though Dashboard is starting correctly
 
-4. **With `--no-health-checks`:**
-   - Deployment completes successfully
+4. **With `--detach`:**
+   - Deployment completes successfully (returns immediately)
    - Health checks still run in background
    - Health checks pass once Dashboard is ready (12-17 min)
 
@@ -65,13 +65,13 @@ flyctl deploy -a ai2-wazuh --image registry.fly.io/ai2-wazuh:deployment-XXXXX --
 
 ## 📋 **Auto-Deploy (GitHub Actions)**
 
-The workflow (`.github/workflows/deploy-wazuh.yml`) automatically includes `--no-health-checks`:
+The workflow (`.github/workflows/deploy-wazuh.yml`) automatically includes `--detach`:
 
 ```yaml
 flyctl deploy \
   --app ai2-wazuh \
   --config fly.toml \
-  --no-health-checks \  # ✅ Always included
+  --detach \  # ✅ Always included - returns immediately
   --remote-only \
   --strategy rolling
 ```
@@ -82,7 +82,7 @@ flyctl deploy \
 
 ## 🔍 **Verification**
 
-After deployment (even with `--no-health-checks`):
+After deployment (even with `--detach`):
 
 ```bash
 # Check machine status
@@ -99,12 +99,12 @@ flyctl logs -a ai2-wazuh
 
 ## ⚠️ **Remember**
 
-**ALWAYS include `--no-health-checks` when deploying manually!**
+**ALWAYS include `--detach` when deploying manually!**
 
 This flag:
-- ✅ Prevents deployment timeout
-- ✅ Allows deployment to complete
+- ✅ Prevents deployment timeout (returns immediately)
+- ✅ Allows deployment to complete without waiting
 - ✅ Health checks still run and pass once Dashboard is ready
 
-**embracingearth.space** - Always use `--no-health-checks`!
+**embracingearth.space** - Always use `--detach`!
 

@@ -4,10 +4,10 @@
 
 Write-Host "Deploying Wazuh without health check timeout..." -ForegroundColor Cyan
 
-# Deploy with --no-health-checks flag
+# Deploy with --detach flag (returns immediately)
 # This allows deployment to complete even if health checks haven't passed yet
 # Health checks will still run and eventually pass once Dashboard is ready (12-17 min)
-flyctl deploy -a ai2-wazuh --no-health-checks
+flyctl deploy -a ai2-wazuh --detach
 
 Write-Host ""
 Write-Host "Deployment complete!" -ForegroundColor Green

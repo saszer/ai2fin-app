@@ -55,11 +55,11 @@ Write-Host ""
 
 # Deploy
 Write-Host "🚀 Starting deployment..." -ForegroundColor Yellow
-Write-Host "⚠️  Using --no-health-checks to prevent deployment timeout" -ForegroundColor Yellow
-Write-Host "   (Health checks will still run and pass once Dashboard is ready)" -ForegroundColor Yellow
+Write-Host "⚠️  Using --detach to prevent deployment timeout" -ForegroundColor Yellow
+Write-Host "   (Returns immediately - health checks still run and pass once Dashboard is ready)" -ForegroundColor Yellow
 Write-Host ""
 
-& $flyctl deploy -a ai2-wazuh --config fly.toml --no-health-checks
+& $flyctl deploy -a ai2-wazuh --config fly.toml --detach
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""

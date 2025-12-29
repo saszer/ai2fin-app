@@ -119,13 +119,13 @@ flyctl logs -a ai2-wazuh | grep -i "302\|health\|dashboard"
 - This usually happens 5-10 minutes after Dashboard is ready
 - **Total time: 17-27 minutes after deployment**
 
-### **Option 2: Deploy with --no-health-checks**
-- Allows deployment to complete immediately
+### **Option 2: Deploy with --detach**
+- Allows deployment to complete immediately (returns without waiting)
 - Health checks still run in background
 - Health checks will pass once Dashboard is ready
 
 ```bash
-flyctl deploy -a ai2-wazuh --no-health-checks
+flyctl deploy -a ai2-wazuh --detach
 ```
 
 ### **Option 3: Check Status Manually**
