@@ -4,9 +4,11 @@
 
 cluster.name: wazuh-cluster
 node.name: wazuh-indexer
-# Use persistent volume path directly (no symlink - OpenSearch bootstrap cannot handle symlinks)
-# Volume is mounted at /var/ossec/data, Indexer data stored in subdirectory
-path.data: /var/ossec/data/wazuh-indexer-data
+# CRITICAL: Using non-volume location due to Fly.io volume mount restrictions
+# Fly.io volumes don't support user switching, so wazuh-indexer can't access /var/ossec/data
+# Using /var/lib/wazuh-indexer/data (not on volume) - data will NOT persist across restarts
+# For production persistence, consider using external backup/restore or different storage solution
+path.data: /var/lib/wazuh-indexer/data
 path.logs: /var/log/wazuh-indexer
 
 network.host: 0.0.0.0
