@@ -82,6 +82,9 @@ RUN mkdir -p /etc/cont-init.d/scripts && \
     find /etc/cont-init.d/scripts/ -name "*.sh" -type f -exec sed -i 's/\r$//' {} \; && \
     chmod +x /etc/cont-init.d/scripts/*.sh 2>/dev/null || true
 
+# Ensure wait script is executable
+RUN chmod +x /etc/cont-init.d/scripts/wait-for-indexer-and-start-dashboard.sh 2>/dev/null || true
+
 # Create log directories
 RUN mkdir -p /var/log/supervisor && \
     mkdir -p /var/log/wazuh-indexer && \
