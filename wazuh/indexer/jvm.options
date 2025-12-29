@@ -1,9 +1,9 @@
 # JVM options for Wazuh Indexer on Fly.io
-# Optimized for 4GB RAM shared CPU environment
+# Optimized for 3GB RAM shared CPU environment
 # embracingearth.space
 
-# Heap size - conservative for Fly.io shared CPU
-# Use 50% of available memory (2GB) but cap at 1.5GB for safety
+# Heap size - balanced for 3GB total RAM
+# Indexer: 1.5GB, Manager: ~512MB, Dashboard: ~512MB, System: ~500MB
 -Xms512m
 -Xmx1536m
 

@@ -54,11 +54,12 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
             # allow_default_init_securityindex creates admin user asynchronously
             # After security index is created, it can take 30-60 seconds for admin user to be ready
             CONSECUTIVE_401=$((CONSECUTIVE_401 + 1))
-            if [ $CONSECUTIVE_401 -ge 6 ]; then
-                # After 60 seconds of 401s with security index existing, admin user should be ready
-                # If still 401, might be password issue, but proceed anyway - Dashboard will retry
-                echo "⚠ Security index exists, admin user should be ready (got ${CONSECUTIVE_401} consecutive 401s)"
-                echo "  Proceeding to start Dashboard - it will retry authentication if needed"
+            if [ $CONSECUTIVE_401 -ge 3 ]; then
+                # After 30 seconds of 401s with security index existing, proceed to start Dashboard
+                # allow_default_init_securityindex creates admin user, but it may take time
+                # Dashboard will retry authentication and handle connection gracefully
+                echo "⚠ Security index exists, proceeding to start Dashboard (got ${CONSECUTIVE_401} consecutive 401s)"
+                echo "  Dashboard will handle authentication retries - admin user should be ready soon"
                 break
             else
                 echo "⚠ Security index exists but admin user not ready yet (HTTP $HTTP_CODE, attempt $CONSECUTIVE_401) - waiting..."
