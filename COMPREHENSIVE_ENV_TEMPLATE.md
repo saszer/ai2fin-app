@@ -132,6 +132,22 @@ CPU_THRESHOLD=80
 GC_THRESHOLD=85
 ```
 
+## 📊 POSTHOG ANALYTICS (User Metrics & Funnels)
+```bash
+# PostHog Configuration (Client-side - React App)
+# Get from: https://app.posthog.com → Settings → Project → API Keys
+REACT_APP_POSTHOG_KEY=phc_your_posthog_project_api_key_here
+REACT_APP_POSTHOG_HOST=https://app.posthog.com
+
+# PostHog Configuration (Server-side - Node.js)
+# Same API key works for both client and server
+POSTHOG_API_KEY=phc_your_posthog_project_api_key_here
+POSTHOG_HOST=https://app.posthog.com
+
+# Note: For self-hosted PostHog, change HOST to your instance URL
+# Example: POSTHOG_HOST=https://posthog.yourdomain.com
+```
+
 ## 🔄 CACHING & REDIS
 ```bash
 # Redis Configuration

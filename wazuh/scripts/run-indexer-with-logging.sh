@@ -108,5 +108,8 @@ trap 'echo "ERROR: Indexer exited with code $?"' EXIT
 
 # Run Indexer as wazuh-indexer user
 # Use su to switch user (supervisord runs this as root)
-exec su -s /bin/bash wazuh-indexer -c "cd /usr/share/wazuh-indexer && exec $INDEXER_BIN" 2>&1
+# CRITICAL: Set temp directory environment variable (overrides JVM options if needed)
+export TMPDIR="/tmp/wazuh-indexer-tmp"
+export OPENSEARCH_JAVA_OPTS="-Djava.io.tmpdir=/tmp/wazuh-indexer-tmp"
+exec su -s /bin/bash wazuh-indexer -c "cd /usr/share/wazuh-indexer && export TMPDIR=\"/tmp/wazuh-indexer-tmp\" && export OPENSEARCH_JAVA_OPTS=\"-Djava.io.tmpdir=/tmp/wazuh-indexer-tmp\" && exec $INDEXER_BIN" 2>&1
 

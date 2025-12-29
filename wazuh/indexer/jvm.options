@@ -7,9 +7,10 @@
 -Xms512m
 -Xmx1536m
 
-# CRITICAL: Use volume for temp directory (has more space than /tmp)
-# /tmp is on root filesystem which has limited space
--Djava.io.tmpdir=/var/ossec/data/wazuh-indexer-tmp
+# CRITICAL: Use /tmp for temp directory - Fly.io volumes don't support user switching
+# Volume mounts have restrictions that prevent sudo -u from working
+# /tmp is on root filesystem and supports user switching properly
+-Djava.io.tmpdir=/tmp/wazuh-indexer-tmp
 
 # GC settings - use G1GC for better performance on low memory
 -XX:+UseG1GC
