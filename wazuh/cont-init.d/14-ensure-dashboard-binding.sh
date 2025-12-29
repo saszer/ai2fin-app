@@ -68,3 +68,4 @@ grep -E "^server\.(host|port):" "$DASHBOARD_CONFIG" || echo "⚠ Warning: Could 
 echo "Dashboard binding fix completed."
 
 
+

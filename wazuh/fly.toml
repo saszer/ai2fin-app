@@ -41,25 +41,26 @@ kill_timeout = "30s"
     handlers = ["http"]
     force_https = true
 
-  # HTTP health check - uses /api/status which returns 200 when Dashboard is ready
+  # HTTP health check - uses /api/status to verify Dashboard is running
   # Dashboard takes 12-17 minutes to fully start (Indexer: 10-15min + Dashboard: 1-2min)
   # NOTE: Fly.io caps grace_period at 1 minute - health check will fail initially
   # Once Dashboard is ready (after 12-17 min), health check will pass
   # Health checks hit internal_port (5601) directly with HTTP, not through TLS proxy
   # IMPORTANT: Health checks will show "connection refused" until Dashboard starts (12-17 min)
   # This is expected - Fly.io will route traffic once health checks pass
-  # Using /api/status instead of / because it returns 200 (not 302 redirect) when ready
+  # /api/status requires auth, so returns 401 when Dashboard is running (service is up!)
+  # 401 is better than "connection refused" - it means Dashboard is responding
   [[services.http_checks]]
     grace_period = "1m"         # Max allowed by Fly.io
     interval = "10s"            # Check every 10s (faster detection once ready)
     timeout = "5s"              # 5s timeout (sufficient for /api/status)
     method = "GET"
-    path = "/api/status"        # API status endpoint - returns 200 when Dashboard is ready
+    path = "/api/status"        # API status endpoint - returns 401 (auth required) when Dashboard is running
     protocol = "http"           # HTTP on internal port 5601 (TLS terminates at proxy)
     tls_skip_verify = false
-    # Accept 200 OK as healthy - /api/status returns 200 when Dashboard is fully ready
-    # Also accept redirects as fallback in case endpoint changes
-    success_codes = [200, 301, 302, 303, 307, 308]
+    # Accept 200 (authenticated), 401 (unauthorized but service is up), and redirects
+    # 401 means Dashboard is running and responding - that's healthy!
+    success_codes = [200, 401, 301, 302, 303, 307, 308]
   
   # TCP health check as fallback - verifies port is open
   # This ensures health check passes even if HTTP check has issues
