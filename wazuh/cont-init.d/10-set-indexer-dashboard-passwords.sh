@@ -19,9 +19,22 @@ fi
 # Update Dashboard config with actual password
 DASHBOARD_CONFIG="/etc/wazuh-dashboard/opensearch_dashboards.yml"
 if [ -f "$DASHBOARD_CONFIG" ]; then
-    # Replace password placeholder with actual value
-    sed -i "s/\${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}/$DASHBOARD_PASSWORD/g" "$DASHBOARD_CONFIG"
+    # Replace password placeholder with actual value (handle both formats)
+    # Replace ${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin} with actual password
+    sed -i "s|\${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}|$DASHBOARD_PASSWORD|g" "$DASHBOARD_CONFIG"
+    # Also replace if it's just the variable name
+    sed -i "s|OPENSEARCH_INITIAL_ADMIN_PASSWORD|$DASHBOARD_PASSWORD|g" "$DASHBOARD_CONFIG" 2>/dev/null || true
+    
+    # Verify password was replaced
+    if grep -q '\${OPENSEARCH_INITIAL_ADMIN_PASSWORD' "$DASHBOARD_CONFIG" 2>/dev/null; then
+        echo "⚠️ WARNING: Password placeholder still found in config, forcing replacement..."
+        # Force replace the entire password line
+        sed -i "s|opensearch.password:.*|opensearch.password: \"$DASHBOARD_PASSWORD\"|" "$DASHBOARD_CONFIG"
+    fi
+    
     echo "✓ Dashboard config updated with password"
+    echo "  Verifying password in config:"
+    grep "opensearch.password:" "$DASHBOARD_CONFIG" | sed 's/password:.*/password: [REDACTED]/' || echo "  ⚠️ Could not find password in config"
 fi
 
 echo "✓ Password configuration completed"

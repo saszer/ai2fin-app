@@ -67,6 +67,15 @@ COPY cont-init.d/ /etc/cont-init.d/
 RUN find /etc/cont-init.d/ -name "*.sh" -type f -exec sed -i 's/\r$//' {} \; && \
     chmod +x /etc/cont-init.d/*.sh 2>/dev/null || true
 
+# Ensure Dashboard config has correct binding
+RUN if [ -f /etc/wazuh-dashboard/opensearch_dashboards.yml ]; then \
+    sed -i 's/^server\.host:.*/server.host: 0.0.0.0/' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || true; \
+    if ! grep -q "^server\.host:" /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null; then \
+        sed -i '/^server\.port:/a server.host: 0.0.0.0' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || \
+        echo "server.host: 0.0.0.0" >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \
+    fi; \
+    fi
+
 # Copy helper scripts
 COPY scripts/ /etc/cont-init.d/scripts/
 RUN mkdir -p /etc/cont-init.d/scripts && \

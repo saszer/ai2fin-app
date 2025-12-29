@@ -14,9 +14,10 @@ opensearch.hosts: ["http://localhost:9200"]
 opensearch.ssl.verificationMode: none
 
 # Admin credentials for Dashboard-to-Indexer connection
-# Password can be customized via OPENSEARCH_INITIAL_ADMIN_PASSWORD secret
+# Password will be replaced by cont-init.d/10-set-indexer-dashboard-passwords.sh
+# Default: admin (will be replaced with actual password from environment)
 opensearch.username: "admin"
-opensearch.password: "${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}"
+opensearch.password: "admin"
 
 # Performance settings - increased timeouts for stability
 opensearch.shardTimeout: 60000
