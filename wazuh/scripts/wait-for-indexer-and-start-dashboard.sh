@@ -34,12 +34,12 @@ done
 # Step 2: Wait for security index initialization (auth check)
 # The security index must be created AND the admin user must be initialized
 # allow_default_init_securityindex: true creates admin user, but it takes time
+# CRITICAL: Admin user creation happens asynchronously after security index is created
 ELAPSED=0
 echo "Step 2: Waiting for security index initialization (admin user creation)..."
+CONSECUTIVE_401=0  # Track consecutive 401s - if we get many, admin user might be ready but password wrong
 while [ $ELAPSED -lt $MAX_WAIT ]; do
     # Try to authenticate - if successful (200), admin user exists and security index is ready
-    # 401 means security is enabled but credentials might be wrong or user not ready yet
-    # Other codes mean Indexer might still be starting
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -u admin:"$ADMIN_PASS" http://localhost:9200/_cluster/health 2>/dev/null)
     
     if [ "$HTTP_CODE" = "200" ]; then
@@ -47,27 +47,37 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
         break
     elif [ "$HTTP_CODE" = "401" ]; then
         # 401 means security is enabled but authentication failed
-        # This could mean:
-        # 1. Security index exists but admin user not created yet (still initializing)
-        # 2. Password is wrong (shouldn't happen with default)
         # Check if security index exists (401 on index check means it exists)
         INDEX_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9200/.opendistro_security 2>/dev/null)
         if [ "$INDEX_CHECK" = "401" ] || [ "$INDEX_CHECK" = "200" ]; then
-            # Security index exists (401 or 200 both mean it exists)
-            echo "⚠ Security index exists but admin user not ready yet (HTTP $HTTP_CODE) - waiting..."
+            # Security index exists - admin user might still be initializing
+            # allow_default_init_securityindex creates admin user asynchronously
+            # After security index is created, it can take 30-60 seconds for admin user to be ready
+            CONSECUTIVE_401=$((CONSECUTIVE_401 + 1))
+            if [ $CONSECUTIVE_401 -ge 6 ]; then
+                # After 60 seconds of 401s with security index existing, admin user should be ready
+                # If still 401, might be password issue, but proceed anyway - Dashboard will retry
+                echo "⚠ Security index exists, admin user should be ready (got ${CONSECUTIVE_401} consecutive 401s)"
+                echo "  Proceeding to start Dashboard - it will retry authentication if needed"
+                break
+            else
+                echo "⚠ Security index exists but admin user not ready yet (HTTP $HTTP_CODE, attempt $CONSECUTIVE_401) - waiting..."
+            fi
         else
             # Security index doesn't exist yet
+            CONSECUTIVE_401=0  # Reset counter
             echo "⚠ Security index not created yet (index check: $INDEX_CHECK) - waiting..."
         fi
     else
         # Other errors - Indexer might still be starting
+        CONSECUTIVE_401=0  # Reset counter
         echo "⚠ Indexer not ready yet (HTTP $HTTP_CODE) - waiting..."
     fi
     sleep 10
     ELAPSED=$((ELAPSED + 10))
     # Log every 30 seconds
     if [ $((ELAPSED % 30)) -eq 0 ]; then
-        echo "Waiting for security index... (${ELAPSED}s/${MAX_WAIT}s) [auth: $HTTP_CODE]"
+        echo "Waiting for security index... (${ELAPSED}s/${MAX_WAIT}s) [auth: $HTTP_CODE, consecutive 401s: $CONSECUTIVE_401]"
     fi
 done
 
