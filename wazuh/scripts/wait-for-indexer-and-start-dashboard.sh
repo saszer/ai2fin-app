@@ -13,18 +13,21 @@ ADMIN_PASS="${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}"
 MAX_WAIT=600
 ELAPSED=0
 
-# Step 1: Wait for Indexer HTTP endpoint (no auth needed)
+# Step 1: Wait for Indexer HTTP endpoint
+# With security enabled, Indexer returns 401 (not 200), but that means it's up
 echo "Step 1: Waiting for Indexer HTTP endpoint..."
 while [ $ELAPSED -lt $MAX_WAIT ]; do
-    if curl -s -f http://localhost:9200 > /dev/null 2>&1; then
-        echo "✓ Indexer HTTP endpoint is up"
+    # Check if Indexer responds (401 is OK - means Indexer is up but needs auth)
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9200 2>/dev/null)
+    if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
+        echo "✓ Indexer HTTP endpoint is up (HTTP $HTTP_CODE)"
         break
     fi
     sleep 5
     ELAPSED=$((ELAPSED + 5))
     # Log every 30 seconds
     if [ $((ELAPSED % 30)) -eq 0 ]; then
-        echo "Waiting for Indexer HTTP... (${ELAPSED}s/${MAX_WAIT}s)"
+        echo "Waiting for Indexer HTTP... (${ELAPSED}s/${MAX_WAIT}s) [last code: ${HTTP_CODE:-none}]"
     fi
 done
 
