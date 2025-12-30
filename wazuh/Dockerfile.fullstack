@@ -17,6 +17,8 @@ RUN apt-get update && \
     lsb-release \
     supervisor \
     openssl \
+    python3 \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Add Wazuh repository and install all components
@@ -80,10 +82,12 @@ RUN if [ -f /etc/wazuh-dashboard/opensearch_dashboards.yml ]; then \
 COPY scripts/ /etc/cont-init.d/scripts/
 RUN mkdir -p /etc/cont-init.d/scripts && \
     find /etc/cont-init.d/scripts/ -name "*.sh" -type f -exec sed -i 's/\r$//' {} \; && \
-    chmod +x /etc/cont-init.d/scripts/*.sh 2>/dev/null || true
+    chmod +x /etc/cont-init.d/scripts/*.sh 2>/dev/null || true && \
+    chmod +x /etc/cont-init.d/scripts/*.py 2>/dev/null || true
 
-# Ensure wait script is executable
-RUN chmod +x /etc/cont-init.d/scripts/wait-for-indexer-and-start-dashboard.sh 2>/dev/null || true
+# Ensure wait script and health check server are executable
+RUN chmod +x /etc/cont-init.d/scripts/wait-for-indexer-and-start-dashboard.sh 2>/dev/null || true && \
+    chmod +x /etc/cont-init.d/scripts/health-check-server.py 2>/dev/null || true
 
 # Create log directories
 RUN mkdir -p /var/log/supervisor && \

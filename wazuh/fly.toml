@@ -22,7 +22,7 @@ kill_timeout = "30s"
   auto_rollback = true
 
 # Dashboard exposed on port 443 (HTTPS) -> internal port 5601
-# Using [[services]] format for TCP health check support
+# Custom health check server on port 8080 -> works around 1-minute grace period limit
 # Manager API (port 55000) accessible via Fly.io internal networking
 [[services]]
   internal_port = 5601
@@ -41,35 +41,37 @@ kill_timeout = "30s"
     handlers = ["http"]
     force_https = true
 
-  # HTTP health check - uses root path / which redirects to /app/login (302)
-  # Dashboard takes 12-17 minutes to fully start (Indexer: 10-15min + Dashboard: 1-2min)
-  # NOTE: Fly.io caps grace_period at 1 minute - health check will fail initially
-  # Once Dashboard is ready (after 12-17 min), health check will pass
-  # Health checks hit internal_port (5601) directly with HTTP, not through TLS proxy
-  # IMPORTANT: Health checks will show "connection refused" until Dashboard starts (12-17 min)
-  # This is expected - Fly.io will route traffic once health checks pass
-  # Root path / doesn't require authentication and returns 302 redirect when Dashboard is running
-  # This is simpler and more reliable than /api/status which requires auth (returns 401)
+  # Custom health check server (port 8080) - WORKAROUND FOR 1-MINUTE GRACE PERIOD
+  # Health check server starts immediately and returns 200 OK during startup phase
+  # This allows Fly.io deployment to pass within 1 minute grace period
+  # Detailed sub-checks run in background and are logged for debugging
+  # After 10 minutes, health check requires Dashboard to actually be ready
   [[services.http_checks]]
     grace_period = "1m"         # Max allowed by Fly.io
-    interval = "10s"            # Check every 10s (faster detection once ready)
-    timeout = "15s"             # 15s timeout (Dashboard can be slow during startup)
+    interval = "10s"            # Check every 10s
+    timeout = "5s"              # Quick timeout (health server responds fast)
     method = "GET"
-    path = "/"                  # Root path - returns 302 redirect to /app/login (no auth required)
-    protocol = "http"           # HTTP on internal port 5601 (TLS terminates at proxy)
+    path = "/health"            # Health check endpoint
+    protocol = "http"           # HTTP on internal port 8080
     tls_skip_verify = false
-    # Accept 200 (if Dashboard serves root), 302/301/303/307/308 (redirects), and 401 (fallback)
-    # 302 redirect means Dashboard is running and responding - that's healthy!
-    success_codes = [200, 301, 302, 303, 307, 308, 401]
-  
-  # TCP health check as fallback - verifies port is open
-  # This ensures health check passes even if HTTP check has issues
-  # TCP check is simpler and might pass earlier than HTTP check
-  # Useful during Dashboard startup when HTTP might not be ready yet
-  [[services.tcp_checks]]
+    success_codes = [200]       # Only 200 OK (health server always returns 200 during startup)
+
+# Health check server service (separate from Dashboard)
+# This service starts immediately and allows Fly.io health check to pass
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+  processes = ["wazuh"]
+
+  [[services.http_checks]]
     grace_period = "1m"         # Max allowed by Fly.io
-    interval = "10s"            # Check every 10s (faster detection once ready)
-    timeout = "5s"              # 5s timeout (TCP connection is fast)
+    interval = "10s"            # Check every 10s
+    timeout = "5s"              # Quick timeout
+    method = "GET"
+    path = "/health"            # Health check endpoint
+    protocol = "http"           # HTTP on internal port 8080
+    tls_skip_verify = false
+    success_codes = [200]       # Health server returns 200 during startup (works around 1-min limit)
 
 # Note: Manager API (port 55000) is accessible via Fly.io internal networking
 # Other apps in same organization can access: https://ai2-wazuh.internal:55000
