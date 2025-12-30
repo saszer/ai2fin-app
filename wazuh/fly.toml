@@ -41,11 +41,19 @@ kill_timeout = "30s"
     handlers = ["http"]
     force_https = true
 
-  # Custom health check server (port 8080) - WORKAROUND FOR 1-MINUTE GRACE PERIOD
-  # Health check server starts immediately and returns 200 OK during startup phase
-  # This allows Fly.io deployment to pass within 1 minute grace period
-  # Detailed sub-checks run in background and are logged for debugging
-  # After 10 minutes, health check requires Dashboard to actually be ready
+# Health check server service (port 8080) - WORKAROUND FOR 1-MINUTE GRACE PERIOD
+# Health check server starts immediately and returns 200 OK during startup phase
+# This allows Fly.io deployment to pass within 1 minute grace period
+# Detailed sub-checks run in background and are logged for debugging
+# After 10 minutes, health check requires Dashboard to actually be ready
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["wazuh"]
+
   [[services.http_checks]]
     grace_period = "1m"         # Max allowed by Fly.io
     interval = "10s"            # Check every 10s
@@ -55,23 +63,6 @@ kill_timeout = "30s"
     protocol = "http"           # HTTP on internal port 8080
     tls_skip_verify = false
     success_codes = [200]       # Only 200 OK (health server always returns 200 during startup)
-
-# Health check server service (separate from Dashboard)
-# This service starts immediately and allows Fly.io health check to pass
-[[services]]
-  internal_port = 8080
-  protocol = "tcp"
-  processes = ["wazuh"]
-
-  [[services.http_checks]]
-    grace_period = "1m"         # Max allowed by Fly.io
-    interval = "10s"            # Check every 10s
-    timeout = "5s"              # Quick timeout
-    method = "GET"
-    path = "/health"            # Health check endpoint
-    protocol = "http"           # HTTP on internal port 8080
-    tls_skip_verify = false
-    success_codes = [200]       # Health server returns 200 during startup (works around 1-min limit)
 
 # Note: Manager API (port 55000) is accessible via Fly.io internal networking
 # Other apps in same organization can access: https://ai2-wazuh.internal:55000
