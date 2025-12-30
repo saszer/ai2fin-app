@@ -7,7 +7,7 @@
 # Wazuh plugin configuration is handled by the plugin itself
 
 server.host: 0.0.0.0
-server.port: 5601
+server.port: 5602  # Dashboard listens on 5602, nginx proxy on 5601 routes to it
 
 # OpenSearch connection with authentication
 opensearch.hosts: ["http://localhost:9200"]

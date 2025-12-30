@@ -19,6 +19,7 @@ RUN apt-get update && \
     openssl \
     python3 \
     procps \
+    nginx \
     && rm -rf /var/lib/apt/lists/*
 
 # Add Wazuh repository and install all components
@@ -70,11 +71,16 @@ RUN find /etc/cont-init.d/ -name "*.sh" -type f -exec sed -i 's/\r$//' {} \; && 
     chmod +x /etc/cont-init.d/*.sh 2>/dev/null || true
 
 # Ensure Dashboard config has correct binding
+# Dashboard listens on port 5602 (nginx proxy on 5601 routes to it)
 RUN if [ -f /etc/wazuh-dashboard/opensearch_dashboards.yml ]; then \
     sed -i 's/^server\.host:.*/server.host: 0.0.0.0/' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || true; \
+    sed -i 's/^server\.port:.*/server.port: 5602/' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || true; \
     if ! grep -q "^server\.host:" /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null; then \
         sed -i '/^server\.port:/a server.host: 0.0.0.0' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || \
         echo "server.host: 0.0.0.0" >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \
+    fi; \
+    if ! grep -q "^server\.port:" /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null; then \
+        echo "server.port: 5602" >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \
     fi; \
     fi
 
@@ -84,6 +90,9 @@ RUN mkdir -p /etc/cont-init.d/scripts && \
     find /etc/cont-init.d/scripts/ -name "*.sh" -type f -exec sed -i 's/\r$//' {} \; && \
     chmod +x /etc/cont-init.d/scripts/*.sh 2>/dev/null || true && \
     chmod +x /etc/cont-init.d/scripts/*.py 2>/dev/null || true
+
+# Copy nginx config for health check proxy
+COPY scripts/nginx-health-proxy.conf /etc/nginx/nginx.conf
 
 # Ensure wait script and health check server are executable
 RUN chmod +x /etc/cont-init.d/scripts/wait-for-indexer-and-start-dashboard.sh 2>/dev/null || true && \

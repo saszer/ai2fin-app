@@ -15,12 +15,12 @@ import sys
 import os
 from datetime import datetime
 
-# Health check server listens on BOTH ports:
-# - Port 8080: For health checks (internal)
-# - Port 5601: For health checks (same as Dashboard, different path)
-# This ensures Fly.io health checks can reach it regardless of which port they check
-PORT = 8080  # Primary health check port
-DASHBOARD_PORT = 5601  # Also listen here for health checks on Dashboard service
+# Health check server listens on port 8080
+# Nginx proxy on port 5601 routes /health requests to this server
+# Dashboard listens on port 5602
+# Nginx proxy routes all other requests to Dashboard
+# This allows both health check and Dashboard to work on port 5601
+PORT = 8080  # Health check server port
 
 class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -211,53 +211,26 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
             }
 
 def main():
-    """Start health check server on both ports"""
-    import threading
+    """Start health check server on port 8080"""
+    print(f"[{datetime.now().isoformat()}] Starting Health Check Server on port {PORT}...")
+    print(f"[{datetime.now().isoformat()}] Health check endpoint: http://0.0.0.0:{PORT}/health")
+    print(f"[{datetime.now().isoformat()}] NOTE: Nginx proxy on port 5601 routes /health to this server")
     
-    print(f"[{datetime.now().isoformat()}] Starting Health Check Server on ports {PORT} and {DASHBOARD_PORT}...")
-    print(f"[{datetime.now().isoformat()}] Health check endpoints:")
-    print(f"  - http://0.0.0.0:{PORT}/health")
-    print(f"  - http://0.0.0.0:{DASHBOARD_PORT}/health")
-    
-    # Start server on port 8080
-    server1 = socketserver.TCPServer(("0.0.0.0", PORT), HealthCheckHandler)
-    server1.allow_reuse_address = True
-    
-    # Start server on port 5601 (same as Dashboard, but different path)
-    # NOTE: This will conflict if Dashboard is already using port 5601
-    # But health check server starts first, so it should be OK
-    # Dashboard will fail to start if port is in use, which is fine - we want health check to work
     try:
-        server2 = socketserver.TCPServer(("0.0.0.0", DASHBOARD_PORT), HealthCheckHandler)
-        server2.allow_reuse_address = True
+        server = socketserver.TCPServer(("0.0.0.0", PORT), HealthCheckHandler)
+        server.allow_reuse_address = True
+        print(f"[{datetime.now().isoformat()}] Health Check Server started on port {PORT}")
+        print(f"[{datetime.now().isoformat()}] Listening for health checks on http://0.0.0.0:{PORT}/health")
         
-        # Start both servers in separate threads
-        thread1 = threading.Thread(target=server1.serve_forever, daemon=True)
-        thread2 = threading.Thread(target=server2.serve_forever, daemon=True)
-        
-        thread1.start()
-        thread2.start()
-        
-        print(f"[{datetime.now().isoformat()}] Health Check Server started on both ports")
-        
-        # Keep main thread alive
         try:
-            while True:
-                time.sleep(1)
+            server.serve_forever()
         except KeyboardInterrupt:
             print(f"[{datetime.now().isoformat()}] Health Check Server stopped")
-            server1.shutdown()
-            server2.shutdown()
+            server.shutdown()
     except OSError as e:
-        # Port 5601 might be in use by Dashboard - that's OK, just use port 8080
-        print(f"[{datetime.now().isoformat()}] WARNING: Could not bind to port {DASHBOARD_PORT}: {e}")
-        print(f"[{datetime.now().isoformat()}] Health check server will only listen on port {PORT}")
-        print(f"[{datetime.now().isoformat()}] Health Check Server started on port {PORT} only")
-        try:
-            server1.serve_forever()
-        except KeyboardInterrupt:
-            print(f"[{datetime.now().isoformat()}] Health Check Server stopped")
-            server1.shutdown()
+        print(f"[{datetime.now().isoformat()}] ERROR: Could not bind to port {PORT}: {e}")
+        print(f"[{datetime.now().isoformat()}] Health check server failed to start!")
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

@@ -42,23 +42,27 @@ kill_timeout = "30s"
     handlers = ["http"]
     force_https = true
 
-  # Health check uses custom health check server
-  # Health check server listens on BOTH port 8080 and port 5601 (path /health)
+  # Health check uses custom health check server via nginx proxy
+  # Architecture:
+  # - Nginx proxy listens on port 5601 (internal_port)
+  # - Routes /health → health check server (port 8080)
+  # - Routes everything else → Dashboard (port 5602)
   # This works around Fly.io's 1-minute grace period limit
   # Health check server starts immediately and returns 200 OK during startup
-  # Traffic routes to Dashboard on port 5601 (internal_port above)
-  # IMPORTANT: Health check hits /health path on port 5601, Dashboard uses / path
+  # Traffic routes to Dashboard on port 5601 via nginx proxy
+  # IMPORTANT: Health check hits /health on port 5601 → nginx → health server (8080)
+  # User traffic hits / on port 5601 → nginx → Dashboard (5602)
   [[services.http_checks]]
     grace_period = "1m"         # Max allowed by Fly.io
     interval = "10s"            # Check every 10s
     timeout = "5s"              # Quick timeout (health server responds fast)
     method = "GET"
-    path = "/health"            # Health check endpoint (health server handles this)
-    protocol = "http"           # HTTP on internal_port 5601 (health server listens here too)
+    path = "/health"            # Health check endpoint (nginx routes to health server)
+    protocol = "http"           # HTTP on internal_port 5601 (nginx proxy)
     tls_skip_verify = false
     success_codes = [200]       # Only 200 OK (health server always returns 200 during startup)
-    # NOTE: Health check hits /health on port 5601, Dashboard serves / on port 5601
-    # Health check server starts first and handles /health, Dashboard handles other paths
+    # NOTE: Health check: port 5601 /health → nginx → health server (8080) → 200 OK
+    # User traffic: port 5601 / → nginx → Dashboard (5602) → Dashboard responds
 
 # Note: Manager API (port 55000) is accessible via Fly.io internal networking
 # Other apps in same organization can access: https://ai2-wazuh.internal:55000
