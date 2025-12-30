@@ -102,31 +102,36 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
             checks['checks']['manager_running'] = manager_check
         
         # Determine overall status
-        # LENIENT DURING STARTUP: Always pass during first 5 minutes
-        # This works around Fly.io's 1-minute grace period limit
-        if is_startup_phase:
-            # During startup: Always return 200 OK
+        # PRIORITY: If Dashboard is ready, always pass (even during startup)
+        # This ensures Fly.io routes traffic as soon as Dashboard is ready
+        dashboard_ready = dashboard_check['healthy'] and dashboard_http['healthy']
+        
+        if dashboard_ready:
+            # Dashboard is ready - always pass (even during startup)
+            # This ensures Fly.io routes traffic immediately when Dashboard is ready
+            checks['status'] = 'healthy'
+            checks['uptime_seconds'] = uptime_seconds
+            status_code = 200
+        elif is_startup_phase:
+            # During startup: Pass even if Dashboard not ready yet
             # This allows Fly.io deployment to succeed within 1 minute
-            # During startup, just check if port is open (TCP) - faster and more reliable
+            # Fly.io will route traffic once Dashboard becomes ready
             checks['status'] = 'healthy (startup)'
             checks['uptime_seconds'] = uptime_seconds
             checks['note'] = 'Health check passing during startup phase - Dashboard may still be initializing'
             status_code = 200
+        elif dashboard_check['healthy']:
+            # Port is open but HTTP not ready - give it a bit more time
+            # This handles the case where Dashboard is starting but not fully ready
+            checks['status'] = 'healthy (port open, HTTP initializing)'
+            checks['uptime_seconds'] = uptime_seconds
+            status_code = 200
         else:
-            # After startup: Require Dashboard to be ready
-            # Dashboard must be listening AND responding to HTTP
-            if dashboard_check['healthy'] and dashboard_http['healthy']:
-                checks['status'] = 'healthy'
-                status_code = 200
-            elif dashboard_check['healthy']:
-                # Port is open but HTTP not ready - give it a bit more time
-                checks['status'] = 'healthy (port open, HTTP initializing)'
-                status_code = 200
-            else:
-                # Dashboard not ready after startup phase - fail health check
-                checks['status'] = 'unhealthy'
-                checks['note'] = 'Dashboard not ready after startup phase'
-                status_code = 503
+            # Dashboard not ready after startup phase - fail health check
+            checks['status'] = 'unhealthy'
+            checks['note'] = 'Dashboard not ready after startup phase'
+            checks['uptime_seconds'] = uptime_seconds
+            status_code = 503
         
         # Log detailed results (for debugging in fly logs)
         print(f"[HEALTH] Uptime: {uptime_seconds}s, Status: {checks['status']}, "
@@ -136,16 +141,16 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
         return status_code, checks
     
     def check_dashboard_listening(self):
-        """Check if Dashboard port 5601 is listening"""
+        """Check if Dashboard port 5602 is listening (Dashboard listens on 5602, nginx on 5601)"""
         try:
             result = subprocess.run(
-                ['sh', '-c', 'cat /proc/net/tcp | grep -q "15E1"'],
+                ['sh', '-c', 'cat /proc/net/tcp | grep -q "15E2"'],  # Port 5602 (0x15E2)
                 capture_output=True,
                 timeout=2
             )
             return {
                 'healthy': result.returncode == 0,
-                'message': 'Port 5601 is listening' if result.returncode == 0 else 'Port 5601 not listening'
+                'message': 'Port 5602 is listening' if result.returncode == 0 else 'Port 5602 not listening'
             }
         except Exception as e:
             return {
@@ -154,10 +159,10 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
             }
     
     def check_dashboard_http(self):
-        """Check if Dashboard responds to HTTP requests"""
+        """Check if Dashboard responds to HTTP requests (Dashboard listens on 5602)"""
         try:
             result = subprocess.run(
-                ['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', 'http://localhost:5601/'],
+                ['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', 'http://localhost:5602/'],
                 capture_output=True,
                 timeout=5
             )
