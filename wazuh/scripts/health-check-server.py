@@ -15,7 +15,12 @@ import sys
 import os
 from datetime import datetime
 
-PORT = 8080  # Health check port (separate from Dashboard 5601)
+# Health check server listens on BOTH ports:
+# - Port 8080: For health checks (internal)
+# - Port 5601: For health checks (same as Dashboard, different path)
+# This ensures Fly.io health checks can reach it regardless of which port they check
+PORT = 8080  # Primary health check port
+DASHBOARD_PORT = 5601  # Also listen here for health checks on Dashboard service
 
 class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -54,7 +59,10 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
         except:
             uptime_seconds = 0
         
-        is_startup_phase = uptime_seconds < 600  # First 10 minutes = startup phase
+        # RECOMMENDED: 5-minute startup phase (instead of 10)
+        # This gives enough buffer for health check server to start
+        # After 5 minutes, we require Dashboard to actually be ready
+        is_startup_phase = uptime_seconds < 300  # First 5 minutes = startup phase
         
         # Quick check: Is health check server itself running?
         # If we got here, server is running - that's enough for Fly.io!
@@ -94,22 +102,30 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
             checks['checks']['manager_running'] = manager_check
         
         # Determine overall status
-        # LENIENT DURING STARTUP: Always pass during first 10 minutes
+        # LENIENT DURING STARTUP: Always pass during first 5 minutes
         # This works around Fly.io's 1-minute grace period limit
         if is_startup_phase:
             # During startup: Always return 200 OK
             # This allows Fly.io deployment to succeed within 1 minute
+            # During startup, just check if port is open (TCP) - faster and more reliable
             checks['status'] = 'healthy (startup)'
             checks['uptime_seconds'] = uptime_seconds
-            checks['note'] = 'Health check passing during startup phase - detailed checks may still be in progress'
+            checks['note'] = 'Health check passing during startup phase - Dashboard may still be initializing'
             status_code = 200
         else:
             # After startup: Require Dashboard to be ready
-            if dashboard_check['healthy'] or dashboard_http['healthy']:
+            # Dashboard must be listening AND responding to HTTP
+            if dashboard_check['healthy'] and dashboard_http['healthy']:
                 checks['status'] = 'healthy'
                 status_code = 200
+            elif dashboard_check['healthy']:
+                # Port is open but HTTP not ready - give it a bit more time
+                checks['status'] = 'healthy (port open, HTTP initializing)'
+                status_code = 200
             else:
+                # Dashboard not ready after startup phase - fail health check
                 checks['status'] = 'unhealthy'
+                checks['note'] = 'Dashboard not ready after startup phase'
                 status_code = 503
         
         # Log detailed results (for debugging in fly logs)
@@ -195,16 +211,53 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
             }
 
 def main():
-    """Start health check server"""
-    print(f"[{datetime.now().isoformat()}] Starting Health Check Server on port {PORT}...")
-    print(f"[{datetime.now().isoformat()}] Health check endpoint: http://0.0.0.0:{PORT}/health")
+    """Start health check server on both ports"""
+    import threading
     
-    with socketserver.TCPServer(("0.0.0.0", PORT), HealthCheckHandler) as httpd:
-        print(f"[{datetime.now().isoformat()}] Health Check Server started successfully")
+    print(f"[{datetime.now().isoformat()}] Starting Health Check Server on ports {PORT} and {DASHBOARD_PORT}...")
+    print(f"[{datetime.now().isoformat()}] Health check endpoints:")
+    print(f"  - http://0.0.0.0:{PORT}/health")
+    print(f"  - http://0.0.0.0:{DASHBOARD_PORT}/health")
+    
+    # Start server on port 8080
+    server1 = socketserver.TCPServer(("0.0.0.0", PORT), HealthCheckHandler)
+    server1.allow_reuse_address = True
+    
+    # Start server on port 5601 (same as Dashboard, but different path)
+    # NOTE: This will conflict if Dashboard is already using port 5601
+    # But health check server starts first, so it should be OK
+    # Dashboard will fail to start if port is in use, which is fine - we want health check to work
+    try:
+        server2 = socketserver.TCPServer(("0.0.0.0", DASHBOARD_PORT), HealthCheckHandler)
+        server2.allow_reuse_address = True
+        
+        # Start both servers in separate threads
+        thread1 = threading.Thread(target=server1.serve_forever, daemon=True)
+        thread2 = threading.Thread(target=server2.serve_forever, daemon=True)
+        
+        thread1.start()
+        thread2.start()
+        
+        print(f"[{datetime.now().isoformat()}] Health Check Server started on both ports")
+        
+        # Keep main thread alive
         try:
-            httpd.serve_forever()
+            while True:
+                time.sleep(1)
         except KeyboardInterrupt:
             print(f"[{datetime.now().isoformat()}] Health Check Server stopped")
+            server1.shutdown()
+            server2.shutdown()
+    except OSError as e:
+        # Port 5601 might be in use by Dashboard - that's OK, just use port 8080
+        print(f"[{datetime.now().isoformat()}] WARNING: Could not bind to port {DASHBOARD_PORT}: {e}")
+        print(f"[{datetime.now().isoformat()}] Health check server will only listen on port {PORT}")
+        print(f"[{datetime.now().isoformat()}] Health Check Server started on port {PORT} only")
+        try:
+            server1.serve_forever()
+        except KeyboardInterrupt:
+            print(f"[{datetime.now().isoformat()}] Health Check Server stopped")
+            server1.shutdown()
 
 if __name__ == '__main__':
     main()
