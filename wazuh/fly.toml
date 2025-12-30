@@ -53,7 +53,7 @@ kill_timeout = "30s"
   [[services.http_checks]]
     grace_period = "1m"         # Max allowed by Fly.io
     interval = "10s"            # Check every 10s (faster detection once ready)
-    timeout = "5s"              # 5s timeout (sufficient for redirect response)
+    timeout = "15s"             # 15s timeout (Dashboard can be slow during startup)
     method = "GET"
     path = "/"                  # Root path - returns 302 redirect to /app/login (no auth required)
     protocol = "http"           # HTTP on internal port 5601 (TLS terminates at proxy)
@@ -64,12 +64,12 @@ kill_timeout = "30s"
   
   # TCP health check as fallback - verifies port is open
   # This ensures health check passes even if HTTP check has issues
-  # TCP check is more lenient and passes once port is open
-  # IMPORTANT: Will fail with "connection refused" until Dashboard binds to port (12-17 min)
+  # TCP check is simpler and might pass earlier than HTTP check
+  # Useful during Dashboard startup when HTTP might not be ready yet
   [[services.tcp_checks]]
     grace_period = "1m"         # Max allowed by Fly.io
-    interval = "15s"            # Check every 15s (less frequent = less load during startup)
-    timeout = "10s"             # Longer timeout
+    interval = "10s"            # Check every 10s (faster detection once ready)
+    timeout = "5s"              # 5s timeout (TCP connection is fast)
 
 # Note: Manager API (port 55000) is accessible via Fly.io internal networking
 # Other apps in same organization can access: https://ai2-wazuh.internal:55000
