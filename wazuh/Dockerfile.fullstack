@@ -117,6 +117,11 @@ RUN echo "Checking binary paths..." && \
 # Configure supervisord to manage all services
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
+# SECURITY FIX: Create non-root user for services - embracingearth.space
+# Wazuh services already run as their own users (wazuh, wazuh-indexer, wazuh-dashboard)
+# But we need to ensure supervisor runs as non-root where possible
+RUN useradd -r -s /bin/false -u 1001 supervisor-user || true
+
 # Create startup script that runs init scripts then supervisord
 RUN printf '#!/bin/bash\n\
 set +e\n\

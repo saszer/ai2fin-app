@@ -52,9 +52,11 @@ resource "google_sql_database_instance" "main" {
   settings {
     tier = "db-g1-small"
     
+    # SECURITY FIX: Enforce SSL for all connections - embracingearth.space
     ip_configuration {
       ipv4_enabled    = true
       private_network = google_compute_network.vpc.id
+      require_ssl     = true  # Enforce SSL/TLS connections
       
       authorized_networks {
         name  = "fly-io"
