@@ -119,6 +119,11 @@ RUN echo "Checking binary paths..." && \
 # Configure supervisord to manage all services
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
+# FIX: Make securityadmin.sh readable/executable by all users
+# This is needed because wait-for-indexer-and-start-dashboard.sh runs it
+RUN chmod +rx /usr/share/wazuh-indexer/plugins/opensearch-security/tools/securityadmin.sh 2>/dev/null || true && \
+    chmod +rx /usr/share/wazuh-indexer/plugins/opensearch-security/tools/*.sh 2>/dev/null || true
+
 # SECURITY FIX: Create non-root user for services - embracingearth.space
 # Wazuh services already run as their own users (wazuh, wazuh-indexer, wazuh-dashboard)
 # But we need to ensure supervisor runs as non-root where possible

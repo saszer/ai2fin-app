@@ -86,9 +86,14 @@ EOF
     cp -p "$PERSISTENT_CERT_DIR"/*.pem "$CERT_DIR/"
 fi
 
-# Set permissions
+# Set permissions - both Indexer and Dashboard need to read these certs
 chown -R wazuh-indexer:wazuh-indexer "$CERT_DIR" 2>/dev/null || true
-chmod 600 "$CERT_DIR"/*.pem 2>/dev/null || true
+# Make CA cert readable by all (needed by Dashboard)
+chmod 644 "$CERT_DIR"/root-ca.pem 2>/dev/null || true
+# Keep private keys restricted
+chmod 600 "$CERT_DIR"/*-key.pem 2>/dev/null || true
+chmod 640 "$CERT_DIR"/wazuh-indexer.pem 2>/dev/null || true
+chmod 640 "$CERT_DIR"/admin.pem 2>/dev/null || true
 chmod 755 "$CERT_DIR"
 
 # Verify certificates
