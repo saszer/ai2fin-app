@@ -40,8 +40,11 @@ plugins.security.ssl.http.pemtrustedcas_filepath: /etc/wazuh-indexer/certs/root-
 
 # Admin DN for securityadmin tool - REQUIRED for security initialization
 # The DN must match the admin certificate's subject exactly
+# OpenSSL outputs: /C=AU/ST=NSW/L=Sydney/O=Wazuh/CN=admin
+# OpenSearch expects: CN=admin,O=Wazuh,L=Sydney,ST=NSW,C=AU (reverse order)
 plugins.security.authcz.admin_dn:
   - "CN=admin,O=Wazuh,L=Sydney,ST=NSW,C=AU"
+  - "/C=AU/ST=NSW/L=Sydney/O=Wazuh/CN=admin"
 
 # Audit
 plugins.security.audit.type: internal_opensearch

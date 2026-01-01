@@ -16,14 +16,18 @@ ELAPSED=0
 # SSL options - skip verification for localhost self-signed certs
 CURL_OPTS="-k"
 
-# Step 1: Wait for Indexer HTTPS endpoint
-# With security enabled, Indexer returns 401 (not 200), but that means it's up
+# Step 1: Wait for Indexer HTTPS endpoint to be accepting connections
+# Possible responses:
+#   - 000: Connection refused (Indexer not yet started)
+#   - 200: Indexer up and security working (unlikely on first boot)
+#   - 401: Indexer up, security enabled, needs auth
+#   - 503: Indexer up but security not initialized (need to run securityadmin)
 echo "Step 1: Waiting for Indexer HTTPS endpoint..."
 while [ $ELAPSED -lt $MAX_WAIT ]; do
-    # Check if Indexer responds (401 is OK - means Indexer is up but needs auth)
     HTTP_CODE=$(curl -s $CURL_OPTS -o /dev/null -w "%{http_code}" https://localhost:9200 2>/dev/null)
-    if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
-        echo "✓ Indexer HTTPS endpoint is up (HTTP $HTTP_CODE)"
+    # Accept 200, 401, or 503 - all mean Indexer is up and responding
+    if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "503" ]; then
+        echo "✓ Indexer HTTPS endpoint is responding (HTTP $HTTP_CODE)"
         break
     fi
     sleep 5
@@ -47,17 +51,34 @@ if [ "$HTTP_CODE" = "200" ]; then
 else
     # Run securityadmin to initialize security configuration
     echo "Running securityadmin to initialize security index..."
-    cd /usr/share/wazuh-indexer/plugins/opensearch-security/tools
+    SECURITYADMIN_PATH="/usr/share/wazuh-indexer/plugins/opensearch-security/tools/securityadmin.sh"
+    
+    # Check if securityadmin exists and is readable
+    if [ ! -r "$SECURITYADMIN_PATH" ]; then
+        echo "WARNING: securityadmin.sh not readable at $SECURITYADMIN_PATH, searching..."
+        FOUND=$(find /usr/share -name "securityadmin.sh" 2>/dev/null | head -1)
+        if [ -n "$FOUND" ]; then
+            SECURITYADMIN_PATH="$FOUND"
+            echo "Found securityadmin at: $SECURITYADMIN_PATH"
+        else
+            echo "ERROR: securityadmin.sh not found anywhere"
+            exit 1
+        fi
+    fi
     
     # Retry securityadmin up to 5 times
+    # Run as wazuh-indexer user to ensure proper permissions
     for i in 1 2 3 4 5; do
         echo "Attempt $i: Running securityadmin..."
-        ./securityadmin.sh \
+        cd /usr/share/wazuh-indexer/plugins/opensearch-security/tools
+        export JAVA_HOME=/usr/share/wazuh-indexer/jdk
+        # Use su to run as wazuh-indexer user (file is owned by wazuh-indexer)
+        su -s /bin/bash -c "bash $SECURITYADMIN_PATH \
             -cd /etc/wazuh-indexer/opensearch-security/ \
             -cacert /etc/wazuh-indexer/certs/root-ca.pem \
             -cert /etc/wazuh-indexer/certs/admin.pem \
             -key /etc/wazuh-indexer/certs/admin-key.pem \
-            -icl -nhnv
+            -icl -nhnv" wazuh-indexer
         
         if [ $? -eq 0 ]; then
             echo "✓ securityadmin completed successfully"

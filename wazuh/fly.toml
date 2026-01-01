@@ -74,7 +74,7 @@ kill_timeout = "30s"
   wazuh = "/start.sh"
 
 [[vm]]
-  memory = "3gb"              # 3GB total - Indexer: ~1.5GB, Manager: ~512MB, Dashboard: ~512MB, System: ~500MB
+  memory = "2gb"              # 3GB total - Indexer: ~1.5GB, Manager: ~512MB, Dashboard: ~512MB, System: ~500MB
   cpu_kind = "shared"
   cpus = 2                    # 2 CPUs for better performance with all services
 
