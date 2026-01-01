@@ -59,11 +59,11 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
         except:
             uptime_seconds = 0
         
-            # CRITICAL: 20-minute startup phase to match Dashboard startup time
-            # Dashboard takes 15-17 minutes to start (Indexer: 10-15 min + Dashboard: 1-2 min)
-            # Health check must pass during entire startup period
-            # After 20 minutes, we require Dashboard to actually be ready
-            is_startup_phase = uptime_seconds < 1200  # First 20 minutes = startup phase
+        # CRITICAL: 20-minute startup phase to match Dashboard startup time
+        # Dashboard takes 15-17 minutes to start (Indexer: 10-15 min + Dashboard: 1-2 min)
+        # Health check must pass during entire startup period
+        # After 20 minutes, we require Dashboard to actually be ready
+        is_startup_phase = uptime_seconds < 1200  # First 20 minutes = startup phase
         
         # Quick check: Is health check server itself running?
         # If we got here, server is running - that's enough for Fly.io!

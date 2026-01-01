@@ -3,11 +3,11 @@
 # Single-node setup for Fly.io
 # embracingearth.space
 #
-# NOTE: Using MINIMAL configuration to avoid validation errors
-# Wazuh plugin configuration is handled by the plugin itself
+# SIMPLIFIED ARCHITECTURE: Dashboard listens directly on port 5601
+# No Nginx proxy - direct binding ensures Fly.io can detect the service
 
-server.host: 0.0.0.0
-server.port: 5602  # Dashboard listens on 5602, nginx proxy on 5601 routes to it
+server.host: "::"
+server.port: 5601  # Dashboard listens directly on 5601 (Fly.io internal_port)
 
 # OpenSearch connection with authentication
 opensearch.hosts: ["http://localhost:9200"]
@@ -26,4 +26,3 @@ opensearch.pingTimeout: 30000
 
 # Request headers whitelist
 opensearch.requestHeadersWhitelist: ["securitytenant","Authorization"]
-
