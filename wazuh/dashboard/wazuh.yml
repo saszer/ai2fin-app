@@ -1,0 +1,11 @@
+# Wazuh Dashboard - API Configuration
+# This file configures how the Dashboard connects to the Wazuh Manager API
+# embracingearth.space
+
+hosts:
+  - default:
+      url: https://localhost
+      port: 55000
+      username: wazuh
+      password: wazuh
+      run_as: false

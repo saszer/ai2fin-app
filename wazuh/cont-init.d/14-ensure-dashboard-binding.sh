@@ -1,12 +1,12 @@
 #!/usr/bin/with-contenv sh
-# Ensure Dashboard binds to 0.0.0.0:5601
+# Ensure Dashboard binds to [::]:5601 (IPv6 all interfaces - required for Fly.io)
 # SIMPLIFIED ARCHITECTURE: Dashboard listens directly on port 5601
-# No nginx proxy - direct binding for Fly.io compatibility
+# Fly.io uses IPv6 internally, so we must bind to :: not 0.0.0.0
 # embracingearth.space
 
 set +e  # Don't exit on error
 
-echo "Ensuring Dashboard binds to 0.0.0.0:5601..."
+echo "Ensuring Dashboard binds to [::]:5601 (IPv6 for Fly.io compatibility)..."
 
 DASHBOARD_CONFIG="/etc/wazuh-dashboard/opensearch_dashboards.yml"
 
@@ -20,25 +20,26 @@ if [ ! -f "${DASHBOARD_CONFIG}.backup" ]; then
     cp "$DASHBOARD_CONFIG" "${DASHBOARD_CONFIG}.backup"
 fi
 
-# Ensure server.host is set to 0.0.0.0
-if ! grep -q "^server.host:.*0.0.0.0" "$DASHBOARD_CONFIG" 2>/dev/null; then
-    echo "Fixing Dashboard host binding..."
+# Ensure server.host is set to :: (IPv6 all interfaces - works with Fly.io)
+# Note: 0.0.0.0 is IPv4 only, Fly.io uses IPv6 internally!
+if ! grep -q '^server.host:.*"::"' "$DASHBOARD_CONFIG" 2>/dev/null; then
+    echo "Fixing Dashboard host binding to :: (IPv6 for Fly.io)..."
     
     # Remove any existing server.host line
     sed -i '/^server\.host:/d' "$DASHBOARD_CONFIG" 2>/dev/null || true
     
-    # Add correct host binding
+    # Add correct host binding (:: for IPv6, must be quoted in YAML)
     if grep -q "^server.port:" "$DASHBOARD_CONFIG" 2>/dev/null; then
         # Insert after server.port
-        sed -i '/^server\.port:/a server.host: 0.0.0.0' "$DASHBOARD_CONFIG" 2>/dev/null || true
+        sed -i '/^server\.port:/a server.host: "::"' "$DASHBOARD_CONFIG" 2>/dev/null || true
     else
         # Add at beginning of file
-        sed -i '1i server.host: 0.0.0.0' "$DASHBOARD_CONFIG" 2>/dev/null || true
+        sed -i '1i server.host: "::"' "$DASHBOARD_CONFIG" 2>/dev/null || true
     fi
     
-    echo "✓ Updated Dashboard config to bind to 0.0.0.0"
+    echo "✓ Updated Dashboard config to bind to :: (IPv6)"
 else
-    echo "✓ Dashboard config already has server.host: 0.0.0.0"
+    echo "✓ Dashboard config already has server.host: ::"
 fi
 
 # SIMPLIFIED ARCHITECTURE: Dashboard listens directly on port 5601

@@ -18,6 +18,8 @@ import './connectors/registerConnectors'; // Register all connectors on startup
 
 // Initialize Prisma for secure credential storage
 import { prisma } from './lib/prisma';
+// 🔒 Wazuh Security Monitoring - embracingearth.space
+import { wazuhRequestLogger, wazuhSecurityMiddleware, logSecurityEvent, wazuhLogger } from './utils/wazuh-logger';
 
 const app = express();
 const httpServer = createServer(app);
@@ -96,6 +98,11 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '10mb' })); // Limit request size for security
 app.use(sanitizeInput); // Sanitize all inputs
+
+// 🔒 Wazuh Security Monitoring - embracingearth.space
+app.use(wazuhSecurityMiddleware); // Detect SQL injection, XSS, path traversal
+app.use(wazuhRequestLogger);       // Log all API access to Wazuh
+wazuhLogger.info('SERVER_START', { port: PORT, environment: process.env.NODE_ENV });
 
 // Rate limiting for webhook endpoints (security: prevent DDoS)
 // Architecture: User/connection-based rate limiting (not IP-based) for scalability

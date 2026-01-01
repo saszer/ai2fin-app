@@ -60,11 +60,15 @@ RUN mkdir -p /var/lib/wazuh-indexer && \
 
 # Configure Wazuh Dashboard
 COPY dashboard/opensearch_dashboards.yml /etc/wazuh-dashboard/opensearch_dashboards.yml
+# Copy wazuh.yml for Dashboard to connect to Wazuh API
+COPY dashboard/wazuh.yml /usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
 RUN mkdir -p /var/lib/wazuh-dashboard && \
     mkdir -p /var/ossec/data/wazuh-dashboard && \
+    mkdir -p /usr/share/wazuh-dashboard/data/wazuh/config && \
     chown -R wazuh-dashboard:wazuh-dashboard /var/lib/wazuh-dashboard && \
     chown -R wazuh-dashboard:wazuh-dashboard /var/ossec/data/wazuh-dashboard && \
-    chown -R wazuh-dashboard:wazuh-dashboard /etc/wazuh-dashboard
+    chown -R wazuh-dashboard:wazuh-dashboard /etc/wazuh-dashboard && \
+    chown -R wazuh-dashboard:wazuh-dashboard /usr/share/wazuh-dashboard/data
 
 # Copy init scripts
 COPY cont-init.d/ /etc/cont-init.d/
@@ -72,14 +76,14 @@ RUN find /etc/cont-init.d/ -name "*.sh" -type f -exec sed -i 's/\r$//' {} \; && 
     chmod +x /etc/cont-init.d/*.sh 2>/dev/null || true
 
 # SIMPLIFIED ARCHITECTURE: Dashboard listens directly on port 5601
-# No Nginx proxy needed - Dashboard binds to 0.0.0.0:5601
-# This ensures Fly.io can detect the service during deployment scan
+# CRITICAL: Fly.io uses IPv6 internally! Must bind to :: not 0.0.0.0
+# This ensures Fly.io can route traffic to the service
 RUN if [ -f /etc/wazuh-dashboard/opensearch_dashboards.yml ]; then \
-    sed -i 's/^server\.host:.*/server.host: 0.0.0.0/' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || true; \
+    sed -i 's/^server\.host:.*/server.host: "::"/' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || true; \
     sed -i 's/^server\.port:.*/server.port: 5601/' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || true; \
     if ! grep -q "^server\.host:" /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null; then \
-        sed -i '/^server\.port:/a server.host: 0.0.0.0' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || \
-        echo "server.host: 0.0.0.0" >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \
+        sed -i '/^server\.port:/a server.host: "::"' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || \
+        echo 'server.host: "::"' >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \
     fi; \
     if ! grep -q "^server\.port:" /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null; then \
         echo "server.port: 5601" >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \

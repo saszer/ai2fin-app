@@ -53,6 +53,20 @@ kill_timeout = "30s"
 # Note: Manager API (port 55000) is accessible via Fly.io internal networking
 # Other apps in same organization can access: https://ai2-wazuh.internal:55000
 # This is more secure than exposing Manager API publicly
+#
+# Wazuh Agent Port (1514) - For agents to connect and send security events
+# Accessible via internal network only (ai2-wazuh.internal:1514)
+[[services]]
+  internal_port = 1514
+  protocol = "tcp"
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  processes = ["wazuh"]
+  
+  # Expose on internal network only for security
+  [[services.ports]]
+    port = 1514
+    handlers = []  # No TLS/HTTP, raw TCP
 
 # Process definition
 [processes]
