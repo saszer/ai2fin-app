@@ -13,73 +13,74 @@ ADMIN_PASS="${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}"
 MAX_WAIT=600
 ELAPSED=0
 
-# Step 1: Wait for Indexer HTTP endpoint
+# SSL options - skip verification for localhost self-signed certs
+CURL_OPTS="-k"
+
+# Step 1: Wait for Indexer HTTPS endpoint
 # With security enabled, Indexer returns 401 (not 200), but that means it's up
-echo "Step 1: Waiting for Indexer HTTP endpoint..."
+echo "Step 1: Waiting for Indexer HTTPS endpoint..."
 while [ $ELAPSED -lt $MAX_WAIT ]; do
     # Check if Indexer responds (401 is OK - means Indexer is up but needs auth)
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9200 2>/dev/null)
+    HTTP_CODE=$(curl -s $CURL_OPTS -o /dev/null -w "%{http_code}" https://localhost:9200 2>/dev/null)
     if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
-        echo "✓ Indexer HTTP endpoint is up (HTTP $HTTP_CODE)"
+        echo "✓ Indexer HTTPS endpoint is up (HTTP $HTTP_CODE)"
         break
     fi
     sleep 5
     ELAPSED=$((ELAPSED + 5))
     # Log every 30 seconds
     if [ $((ELAPSED % 30)) -eq 0 ]; then
-        echo "Waiting for Indexer HTTP... (${ELAPSED}s/${MAX_WAIT}s) [last code: ${HTTP_CODE:-none}]"
+        echo "Waiting for Indexer HTTPS... (${ELAPSED}s/${MAX_WAIT}s) [last code: ${HTTP_CODE:-none}]"
     fi
 done
 
-# Step 2: Wait for security index initialization (auth check)
-# The security index must be created AND the admin user must be initialized
-# allow_default_init_securityindex: true creates admin user, but it takes time
-# CRITICAL: Admin user creation happens asynchronously after security index is created
+# Step 2: Run securityadmin to initialize security configuration
+# This is REQUIRED when plugins.security.ssl.http.enabled: true
 ELAPSED=0
-echo "Step 2: Waiting for security index initialization (admin user creation)..."
-CONSECUTIVE_401=0  # Track consecutive 401s - if we get many, admin user might be ready but password wrong
-while [ $ELAPSED -lt $MAX_WAIT ]; do
-    # Try to authenticate - if successful (200), admin user exists and security index is ready
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -u admin:"$ADMIN_PASS" http://localhost:9200/_cluster/health 2>/dev/null)
+echo "Step 2: Initializing security configuration with securityadmin..."
+export JAVA_HOME=/usr/share/wazuh-indexer/jdk
+
+# Check if security is already initialized
+HTTP_CODE=$(curl -s $CURL_OPTS -o /dev/null -w "%{http_code}" -u admin:"$ADMIN_PASS" https://localhost:9200/_cluster/health 2>/dev/null)
+if [ "$HTTP_CODE" = "200" ]; then
+    echo "✓ Security already initialized - skipping securityadmin"
+else
+    # Run securityadmin to initialize security configuration
+    echo "Running securityadmin to initialize security index..."
+    cd /usr/share/wazuh-indexer/plugins/opensearch-security/tools
     
-    if [ "$HTTP_CODE" = "200" ]; then
-        echo "✓ Security index initialized - admin user exists and is ready"
-        break
-    elif [ "$HTTP_CODE" = "401" ]; then
-        # 401 means security is enabled but authentication failed
-        # Check if security index exists (401 on index check means it exists)
-        INDEX_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9200/.opendistro_security 2>/dev/null)
-        if [ "$INDEX_CHECK" = "401" ] || [ "$INDEX_CHECK" = "200" ]; then
-            # Security index exists - admin user might still be initializing
-            # allow_default_init_securityindex creates admin user asynchronously
-            # After security index is created, it can take 30-60 seconds for admin user to be ready
-            CONSECUTIVE_401=$((CONSECUTIVE_401 + 1))
-            if [ $CONSECUTIVE_401 -ge 3 ]; then
-                # After 30 seconds of 401s with security index existing, proceed to start Dashboard
-                # allow_default_init_securityindex creates admin user, but it may take time
-                # Dashboard will retry authentication and handle connection gracefully
-                echo "⚠ Security index exists, proceeding to start Dashboard (got ${CONSECUTIVE_401} consecutive 401s)"
-                echo "  Dashboard will handle authentication retries - admin user should be ready soon"
-                break
-            else
-                echo "⚠ Security index exists but admin user not ready yet (HTTP $HTTP_CODE, attempt $CONSECUTIVE_401) - waiting..."
-            fi
+    # Retry securityadmin up to 5 times
+    for i in 1 2 3 4 5; do
+        echo "Attempt $i: Running securityadmin..."
+        ./securityadmin.sh \
+            -cd /etc/wazuh-indexer/opensearch-security/ \
+            -cacert /etc/wazuh-indexer/certs/root-ca.pem \
+            -cert /etc/wazuh-indexer/certs/admin.pem \
+            -key /etc/wazuh-indexer/certs/admin-key.pem \
+            -icl -nhnv
+        
+        if [ $? -eq 0 ]; then
+            echo "✓ securityadmin completed successfully"
+            break
         else
-            # Security index doesn't exist yet
-            CONSECUTIVE_401=0  # Reset counter
-            echo "⚠ Security index not created yet (index check: $INDEX_CHECK) - waiting..."
+            echo "⚠ securityadmin failed (attempt $i/5) - waiting 30 seconds..."
+            sleep 30
         fi
-    else
-        # Other errors - Indexer might still be starting
-        CONSECUTIVE_401=0  # Reset counter
-        echo "⚠ Indexer not ready yet (HTTP $HTTP_CODE) - waiting..."
+    done
+fi
+
+# Step 3: Verify security is now working
+echo "Step 3: Verifying security configuration..."
+ELAPSED=0
+while [ $ELAPSED -lt 120 ]; do
+    HTTP_CODE=$(curl -s $CURL_OPTS -o /dev/null -w "%{http_code}" -u admin:"$ADMIN_PASS" https://localhost:9200/_cluster/health 2>/dev/null)
+    if [ "$HTTP_CODE" = "200" ]; then
+        echo "✓ Security verified - admin authentication working"
+        break
     fi
+    echo "⚠ Waiting for security to stabilize... (HTTP $HTTP_CODE)"
     sleep 10
     ELAPSED=$((ELAPSED + 10))
-    # Log every 30 seconds
-    if [ $((ELAPSED % 30)) -eq 0 ]; then
-        echo "Waiting for security index... (${ELAPSED}s/${MAX_WAIT}s) [auth: $HTTP_CODE, consecutive 401s: $CONSECUTIVE_401]"
-    fi
 done
 
 # Give Indexer a moment to fully initialize after security index is ready

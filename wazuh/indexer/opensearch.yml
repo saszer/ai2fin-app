@@ -31,12 +31,17 @@ plugins.security.ssl.transport.pemtrustedcas_filepath: /etc/wazuh-indexer/certs/
 plugins.security.ssl.transport.enforce_hostname_verification: false
 plugins.security.ssl.transport.resolve_hostname: false
 
-# HTTP SSL (optional - we use HTTP since it's localhost only)
-plugins.security.ssl.http.enabled: false
+# HTTP SSL - ENABLED for securityadmin to work
+# Required for initializing security configuration
+plugins.security.ssl.http.enabled: true
+plugins.security.ssl.http.pemcert_filepath: /etc/wazuh-indexer/certs/wazuh-indexer.pem
+plugins.security.ssl.http.pemkey_filepath: /etc/wazuh-indexer/certs/wazuh-indexer-key.pem
+plugins.security.ssl.http.pemtrustedcas_filepath: /etc/wazuh-indexer/certs/root-ca.pem
 
-# Admin DN - empty for password-based authentication
-# Certificate-based admin auth not needed when using password auth
-plugins.security.authcz.admin_dn: []
+# Admin DN for securityadmin tool - REQUIRED for security initialization
+# The DN must match the admin certificate's subject exactly
+plugins.security.authcz.admin_dn:
+  - "CN=admin,O=Wazuh,L=Sydney,ST=NSW,C=AU"
 
 # Audit
 plugins.security.audit.type: internal_opensearch

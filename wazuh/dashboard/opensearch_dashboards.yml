@@ -10,8 +10,10 @@ server.host: "::"
 server.port: 5601  # Dashboard listens directly on 5601 (Fly.io internal_port)
 
 # OpenSearch connection with authentication
-opensearch.hosts: ["http://localhost:9200"]
+# Using HTTPS for secure communication with Indexer
+opensearch.hosts: ["https://localhost:9200"]
 opensearch.ssl.verificationMode: none
+opensearch.ssl.certificateAuthorities: ["/etc/wazuh-indexer/certs/root-ca.pem"]
 
 # Admin credentials for Dashboard-to-Indexer connection
 # Password will be replaced by cont-init.d/10-set-indexer-dashboard-passwords.sh

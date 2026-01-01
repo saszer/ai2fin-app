@@ -68,8 +68,9 @@ EOF
     echo "✓ Indexer certificate generated"
 
     # Generate Admin certificate for security initialization
+    # DN MUST match plugins.security.authcz.admin_dn in opensearch.yml
     openssl genrsa -out "$PERSISTENT_CERT_DIR/admin-key.pem" 2048
-    openssl req -new -subj "/CN=admin" \
+    openssl req -new -subj "/C=AU/ST=NSW/L=Sydney/O=Wazuh/CN=admin" \
         -key "$PERSISTENT_CERT_DIR/admin-key.pem" \
         -out "$PERSISTENT_CERT_DIR/admin.csr"
     openssl x509 -req -in "$PERSISTENT_CERT_DIR/admin.csr" \
@@ -79,7 +80,7 @@ EOF
         -out "$PERSISTENT_CERT_DIR/admin.pem" \
         -days 3650
     rm -f "$PERSISTENT_CERT_DIR/admin.csr"
-    echo "✓ Admin certificate generated"
+    echo "✓ Admin certificate generated with DN: CN=admin,O=Wazuh,L=Sydney,ST=NSW,C=AU"
 
     # Copy to expected location
     cp -p "$PERSISTENT_CERT_DIR"/*.pem "$CERT_DIR/"
