@@ -10,7 +10,7 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV WAZUH_VERSION=4.8.0
 
-# Install dependencies (removed nginx - not needed for simplified architecture)
+# Install dependencies (nginx required for stable public entrypoint on Fly.io)
 RUN apt-get update && \
     apt-get install -y \
     curl \
@@ -20,6 +20,7 @@ RUN apt-get update && \
     supervisor \
     openssl \
     python3 \
+    nginx \
     procps \
     && rm -rf /var/lib/apt/lists/*
 
@@ -75,18 +76,17 @@ COPY cont-init.d/ /etc/cont-init.d/
 RUN find /etc/cont-init.d/ -name "*.sh" -type f -exec sed -i 's/\r$//' {} \; && \
     chmod +x /etc/cont-init.d/*.sh 2>/dev/null || true
 
-# SIMPLIFIED ARCHITECTURE: Dashboard listens directly on port 5601
+# Dashboard listens on 5602 (proxied by nginx on 5601)
 # CRITICAL: Fly.io uses IPv6 internally! Must bind to :: not 0.0.0.0
-# This ensures Fly.io can route traffic to the service
 RUN if [ -f /etc/wazuh-dashboard/opensearch_dashboards.yml ]; then \
     sed -i 's/^server\.host:.*/server.host: "::"/' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || true; \
-    sed -i 's/^server\.port:.*/server.port: 5601/' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || true; \
+    sed -i 's/^server\.port:.*/server.port: 5602/' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || true; \
     if ! grep -q "^server\.host:" /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null; then \
         sed -i '/^server\.port:/a server.host: "::"' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || \
         echo 'server.host: "::"' >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \
     fi; \
     if ! grep -q "^server\.port:" /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null; then \
-        echo "server.port: 5601" >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \
+        echo "server.port: 5602" >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \
     fi; \
     fi
 
@@ -99,6 +99,10 @@ RUN mkdir -p /etc/cont-init.d/scripts && \
 
 # Ensure wait script is executable
 RUN chmod +x /etc/cont-init.d/scripts/wait-for-indexer-and-start-dashboard.sh 2>/dev/null || true
+
+# Nginx proxy config (public entrypoint on 5601)
+RUN mkdir -p /etc/nginx/conf.d
+COPY scripts/nginx-health-proxy.conf /etc/nginx/nginx.conf
 
 # Create log directories
 RUN mkdir -p /var/log/supervisor && \
@@ -143,13 +147,12 @@ echo "Starting supervisord..."\n\
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf\n\
 ' > /start.sh && chmod +x /start.sh
 
-# Expose ports
-EXPOSE 55000 9200 5601
+# Expose ports (5601 nginx public entrypoint; 5602 dashboard UI behind nginx; 8080 internal health server)
+EXPOSE 55000 9200 5601 5602 8080
 
-# Health check - Check Dashboard directly on port 5601
-# Dashboard returns 302 (redirect to login) when ready
+# Health check - Check nginx /health (proxied to internal health server)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
-  CMD curl -f http://localhost:5601/ || exit 1
+  CMD curl -f http://localhost:5601/health || exit 1
 
 # Start script (runs init scripts then supervisord)
 CMD ["/start.sh"]

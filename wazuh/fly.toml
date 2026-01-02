@@ -22,15 +22,18 @@ kill_timeout = "30s"
   auto_rollback = true
 
 # Dashboard exposed on port 443 (HTTPS) -> internal port 5601
-# SIMPLIFIED ARCHITECTURE: Dashboard listens directly on port 5601
-# No Nginx proxy - direct binding ensures Fly.io can detect the service
+# Nginx proxy architecture (recommended for Fly stability):
+# - nginx listens on 5601 (public entrypoint, stable + fast bind)
+# - /health → internal health server (8080) to keep Fly checks healthy during long startup
+# - / → Wazuh Dashboard (5602)
 # Manager API (port 55000) accessible via Fly.io internal networking
 [[services]]
   internal_port = 5601
   protocol = "tcp"
   auto_stop_machines = "off"    # REQUIRED: Indexer needs 10+ min to start
   auto_start_machines = true
-  min_machines_running = 0
+  # Always-on, low-maintenance monitoring (SIEM should be available continuously)
+  min_machines_running = 1
   processes = ["wazuh"]
 
   [[services.ports]]
@@ -42,13 +45,14 @@ kill_timeout = "30s"
     handlers = ["http"]
     force_https = true
 
-  # SIMPLE TCP HEALTH CHECK - Just verify port 5601 is listening
-  # TCP checks are more reliable than HTTP checks for slow-starting applications
-  # Dashboard takes 15-20 minutes to start, TCP check will pass once it's listening
-  [[services.tcp_checks]]
-    grace_period = "30s"        # Allow 30s for initial binding
-    interval = "15s"            # Check every 15s
-    timeout = "5s"              # TCP connects are fast
+  # HTTP health check hits nginx `/health`, which is served by the internal health-check server (8080).
+  # This prevents Fly from returning 503 during long indexer/dashboard startup.
+  [[services.http_checks]]
+    grace_period = "60s"
+    interval = "15s"
+    timeout = "10s"
+    method = "get"
+    path = "/health"
 
 # Note: Manager API (port 55000) is accessible via Fly.io internal networking
 # Other apps in same organization can access: https://ai2-wazuh.internal:55000
@@ -74,9 +78,10 @@ kill_timeout = "30s"
   wazuh = "/start.sh"
 
 [[vm]]
-  memory = "2gb"              # 3GB total - Indexer: ~1.5GB, Manager: ~512MB, Dashboard: ~512MB, System: ~500MB
+  # Cost-optimized always-on baseline. 2GB is the safe floor for Indexer+Dashboard stability.
+  memory = "2gb"
   cpu_kind = "shared"
-  cpus = 2                    # 2 CPUs for better performance with all services
+  cpus = 1
 
 # Volume mounts for data persistence
 # All Wazuh data stored in single volume (subdirectories)
