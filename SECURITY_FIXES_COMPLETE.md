@@ -50,8 +50,8 @@ npm install
 **Status:** Fixed
 
 **Files Fixed:**
-- ✏️ `ai2-core-app/minimal-server.js` - Added Helmet with CSP, HSTS
-- ✏️ `ai2-core-app/simple-server.js` - Added Helmet with CSP, HSTS
+- ❌ Removed `ai2-core-app/minimal-server.js` (legacy debug server)
+- ❌ Removed `ai2-core-app/simple-server.js` (legacy debug server)
 - ✅ `ai2-core-app/src/server.js` - Already has comprehensive security headers
 
 **Headers Added:**
