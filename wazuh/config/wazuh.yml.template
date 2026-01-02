@@ -4,6 +4,9 @@
 #
 # SECURITY: This is a template. Actual credentials are injected at runtime from Fly secrets.
 # The init script /etc/cont-init.d/10-configure-dashboard.sh will replace placeholders.
+#
+# DEFAULT: Wazuh comes with 'wazuh-wui' user (password auto-generated on first run)
+# If using custom user, set WAZUH_API_USER and WAZUH_API_PASSWORD in Fly secrets
 
 hosts:
   - default:

@@ -15,11 +15,11 @@ opensearch.hosts: ["https://localhost:9200"]
 opensearch.ssl.verificationMode: none
 opensearch.ssl.certificateAuthorities: ["/etc/wazuh-indexer/certs/root-ca.pem"]
 
-# Admin credentials for Dashboard-to-Indexer connection
-# Password will be replaced by cont-init.d/10-set-indexer-dashboard-passwords.sh
-# Default: admin (will be replaced with actual password from environment)
-opensearch.username: "admin"
-opensearch.password: "admin"
+# Dashboard user for OpenSearch connection
+# Using kibanaserver user (created by default, password: kibanaserver)
+# This avoids issues with admin password being hashed by securityadmin
+opensearch.username: "kibanaserver"
+opensearch.password: "kibanaserver"
 
 # Performance settings - increased timeouts for stability
 opensearch.shardTimeout: 60000
