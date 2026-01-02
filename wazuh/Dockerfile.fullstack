@@ -61,8 +61,7 @@ RUN mkdir -p /var/lib/wazuh-indexer && \
 
 # Configure Wazuh Dashboard
 COPY dashboard/opensearch_dashboards.yml /etc/wazuh-dashboard/opensearch_dashboards.yml
-# Copy wazuh.yml for Dashboard to connect to Wazuh API
-COPY dashboard/wazuh.yml /usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
+# Dashboard API config will be generated at runtime from template (no hardcoded credentials)
 RUN mkdir -p /var/lib/wazuh-dashboard && \
     mkdir -p /var/ossec/data/wazuh-dashboard && \
     mkdir -p /usr/share/wazuh-dashboard/data/wazuh/config && \
@@ -122,6 +121,12 @@ RUN echo "Checking binary paths..." && \
 
 # Configure supervisord to manage all services
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Copy Dashboard API configuration TEMPLATE (credentials injected at runtime from Fly secrets)
+# SECURITY: Never hardcode credentials in the image
+# embracingearth.space
+RUN mkdir -p /etc/wazuh-dashboard-template
+COPY config/wazuh.yml.template /etc/wazuh-dashboard-template/wazuh.yml.template
 
 # FIX: Make securityadmin.sh readable/executable by all users
 # This is needed because wait-for-indexer-and-start-dashboard.sh runs it

@@ -22,37 +22,24 @@ kill_timeout = "30s"
   auto_rollback = true
 
 # Dashboard exposed on port 443 (HTTPS) -> internal port 5601
-# Nginx proxy architecture (recommended for Fly stability):
-# - nginx listens on 5601 (public entrypoint, stable + fast bind)
-# - /health → internal health server (8080) to keep Fly checks healthy during long startup
-# - / → Wazuh Dashboard (5602)
+# IMPORTANT: Use Fly's `http_service` so routing is HTTP-based (not `tcp/443`),
+# otherwise Fly-proxy may ignore http_checks and require tcp_checks (which proved flaky here).
 # Manager API (port 55000) accessible via Fly.io internal networking
-[[services]]
+[http_service]
   internal_port = 5601
-  protocol = "tcp"
   auto_stop_machines = "off"    # REQUIRED: Indexer needs 10+ min to start
   auto_start_machines = true
-  # Always-on, low-maintenance monitoring (SIEM should be available continuously)
   min_machines_running = 1
   processes = ["wazuh"]
+  force_https = true
 
-  [[services.ports]]
-    port = 443
-    handlers = ["tls", "http"]
-
-  [[services.ports]]
-    port = 80
-    handlers = ["http"]
-    force_https = true
-
-  # HTTP health check hits nginx `/health`, which is served by the internal health-check server (8080).
-  # This prevents Fly from returning 503 during long indexer/dashboard startup.
-  [[services.http_checks]]
+  # Fly health check: nginx always-200 endpoint.
+  [[http_service.checks]]
     grace_period = "60s"
     interval = "15s"
-    timeout = "10s"
-    method = "get"
-    path = "/health"
+    timeout = "5s"
+    method = "GET"
+    path = "/fly-health"
 
 # Note: Manager API (port 55000) is accessible via Fly.io internal networking
 # Other apps in same organization can access: https://ai2-wazuh.internal:55000
@@ -78,10 +65,11 @@ kill_timeout = "30s"
   wazuh = "/start.sh"
 
 [[vm]]
-  # Cost-optimized always-on baseline. 2GB is the safe floor for Indexer+Dashboard stability.
-  memory = "2gb"
+  # 3GB for stable Indexer+Dashboard+Manager operation under load
+  # Indexer: ~1.5GB, Manager: ~512MB, Dashboard: ~512MB, System: ~500MB
+  memory = "3gb"
   cpu_kind = "shared"
-  cpus = 1
+  cpus = 2
 
 # Volume mounts for data persistence
 # All Wazuh data stored in single volume (subdirectories)

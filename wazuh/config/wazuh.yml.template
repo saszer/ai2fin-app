@@ -1,0 +1,16 @@
+# Wazuh Dashboard - API Configuration TEMPLATE
+# This file configures how the Dashboard connects to the Wazuh Manager API
+# embracingearth.space
+#
+# SECURITY: This is a template. Actual credentials are injected at runtime from Fly secrets.
+# The init script /etc/cont-init.d/10-configure-dashboard.sh will replace placeholders.
+
+hosts:
+  - default:
+      url: https://localhost
+      port: 55000
+      username: __WAZUH_API_USER__
+      password: __WAZUH_API_PASSWORD__
+      run_as: false
+
+customization.logo.app: "custom/images/customization.logo.app.png?v=1767320479282"

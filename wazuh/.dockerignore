@@ -1,0 +1,21 @@
+# Keep the Fly/Depot build context small and predictable.
+# This avoids slow builds and Windows tar errors from unrelated workspace dirs.
+# embracingearth.space
+
+**/.git
+**/.DS_Store
+
+# Node/JS monorepo noise (this repo contains many apps; Wazuh image doesn't need them)
+**/node_modules
+**/dist
+**/build
+**/.next
+**/.turbo
+**/.cache
+
+# IDE / OS
+**/.vscode
+**/.idea
+**/terminals
+**/*.log
+
