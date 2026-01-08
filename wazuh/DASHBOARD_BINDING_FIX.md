@@ -100,3 +100,8 @@ flyctl deploy -a ai2-wazuh
 
 
 
+
+
+
+
+

@@ -68,3 +68,8 @@ fly deploy -a ai2-wazuh
 
 
 
+
+
+
+
+

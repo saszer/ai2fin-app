@@ -68,3 +68,8 @@ echo "Verifying Dashboard config:"
 grep -E "^server\.(host|port):" "$DASHBOARD_CONFIG" || echo "⚠ Warning: Could not find server.host or server.port in config"
 
 echo "Dashboard binding fix completed."
+
+
+
+
+

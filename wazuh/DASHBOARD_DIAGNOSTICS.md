@@ -107,3 +107,8 @@ flyctl logs -a ai2-wazuh
 
 
 
+
+
+
+
+
