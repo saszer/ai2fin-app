@@ -1,0 +1,148 @@
+# Wazuh Full Stack - Local Development Setup
+# Manager + Indexer + Dashboard running locally
+# embracingearth.space
+version: '3.8'
+
+services:
+  # Wazuh Manager - Core security monitoring engine
+  wazuh-manager:
+    image: wazuh/wazuh-manager:4.8.0
+    container_name: wazuh-manager
+    hostname: wazuh-manager
+    restart: unless-stopped
+    environment:
+      - WAZUH_API_USER=${WAZUH_API_USER:-szsah}
+      - WAZUH_API_PASSWORD=${WAZUH_API_PASSWORD}
+      - WAZUH_CLUSTER_KEY=${WAZUH_CLUSTER_KEY:-}
+    volumes:
+      - wazuh-manager-data:/var/ossec/data
+      - wazuh-manager-logs:/var/ossec/logs
+      - ./wazuh.conf:/var/ossec/etc/ossec.conf:ro
+      - ./local_internal_options.conf:/var/ossec/etc/local_internal_options.conf:ro
+      - ./custom_rules:/var/ossec/etc/custom_rules:ro
+      - ./custom_decoders:/var/ossec/etc/custom_decoders:ro
+      - ./etc/shared:/var/ossec/etc/shared:ro
+      - ./etc/lists:/var/ossec/etc/lists:ro
+      - ./api/configuration/api.yaml:/var/ossec/api/configuration/api.yaml:ro
+    ports:
+      - "55000:55000"  # Wazuh API
+      - "1514:1514"    # Agent communication
+      - "1515:1515"    # Agent enrollment
+    networks:
+      - wazuh-network
+    depends_on:
+      - wazuh-indexer
+    healthcheck:
+      test: ["CMD", "curl", "-k", "-f", "https://localhost:55000/", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Wazuh Indexer - OpenSearch for storing security events
+  wazuh-indexer:
+    image: wazuh/wazuh-indexer:4.8.0
+    container_name: wazuh-indexer
+    hostname: wazuh-indexer
+    restart: unless-stopped
+    environment:
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}
+      - OPENSEARCH_DASHBOARDS_PASSWORD=${OPENSEARCH_DASHBOARDS_PASSWORD:-kibanaserver}
+    volumes:
+      - wazuh-indexer-data:/var/lib/wazuh-indexer
+      - wazuh-indexer-logs:/var/log/wazuh-indexer
+      - ./indexer/opensearch.yml:/usr/share/wazuh-indexer/opensearch.yml:ro
+      - ./indexer/jvm.options:/usr/share/wazuh-indexer/config/jvm.options:ro
+    ports:
+      - "9200:9200"    # OpenSearch API
+      - "9300:9300"    # OpenSearch transport
+    networks:
+      - wazuh-network
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD-SHELL", "curl -k -f https://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s  # Indexer takes 5+ minutes to start
+
+  # Wazuh Dashboard - Web UI for security monitoring
+  wazuh-dashboard:
+    image: wazuh/wazuh-dashboard:4.8.0
+    container_name: wazuh-dashboard
+    hostname: wazuh-dashboard
+    restart: unless-stopped
+    environment:
+      - OPENSEARCH_HOSTS=https://wazuh-indexer:9200
+      - OPENSEARCH_USERNAME=kibanaserver
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_DASHBOARDS_PASSWORD:-kibanaserver}
+      - WAZUH_API_USER=${WAZUH_API_USER:-szsah}
+      - WAZUH_API_PASSWORD=${WAZUH_API_PASSWORD}
+      - WAZUH_API_URL=https://wazuh-manager:55000
+    volumes:
+      - wazuh-dashboard-data:/var/lib/wazuh-dashboard
+      - wazuh-dashboard-logs:/var/log/wazuh-dashboard
+      - ./dashboard/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml:ro
+      - ./config/wazuh.yml.local:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml:ro
+    ports:
+      - "5601:5601"    # Dashboard UI
+    networks:
+      - wazuh-network
+    depends_on:
+      wazuh-indexer:
+        condition: service_healthy
+      wazuh-manager:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  # Filebeat - Ships Wazuh alerts to Indexer
+  filebeat:
+    image: wazuh/filebeat:4.8.0
+    container_name: wazuh-filebeat
+    hostname: wazuh-filebeat
+    restart: unless-stopped
+    user: root
+    environment:
+      - OPENSEARCH_HOSTS=https://wazuh-indexer:9200
+      - OPENSEARCH_USERNAME=admin
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - wazuh-manager-logs:/var/ossec/logs:ro
+    networks:
+      - wazuh-network
+    depends_on:
+      wazuh-indexer:
+        condition: service_healthy
+      wazuh-manager:
+        condition: service_healthy
+
+networks:
+  wazuh-network:
+    driver: bridge
+    name: wazuh-network
+
+volumes:
+  wazuh-manager-data:
+    name: wazuh-manager-data
+  wazuh-manager-logs:
+    name: wazuh-manager-logs
+  wazuh-indexer-data:
+    name: wazuh-indexer-data
+  wazuh-indexer-logs:
+    name: wazuh-indexer-logs
+  wazuh-dashboard-data:
+    name: wazuh-dashboard-data
+  wazuh-dashboard-logs:
+    name: wazuh-dashboard-logs

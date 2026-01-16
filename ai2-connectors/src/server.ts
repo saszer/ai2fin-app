@@ -23,7 +23,7 @@ import { wazuhRequestLogger, wazuhSecurityMiddleware, logSecurityEvent, wazuhLog
 
 const app = express();
 const httpServer = createServer(app);
-const PORT = process.env.CONNECTORS_PORT || 3003;
+const PORT = parseInt(process.env.CONNECTORS_PORT || '3003', 10);
 
 // Initialize Socket.io for real-time updates
 const io = new Server(httpServer, {
@@ -232,14 +232,100 @@ app.get('/api/connectors/status', (req, res) => {
   });
 });
 
+/**
+ * Validate database schema - ensure required tables exist
+ * CRITICAL: Prevents runtime errors when migrations haven't been run
+ * embracingearth.space - Enterprise-grade startup validation
+ */
+/**
+ * Validate database schema - ensure required tables exist
+ * CRITICAL: Prevents runtime errors when migrations haven't been run
+ * embracingearth.space - Enterprise-grade startup validation
+ * 
+ * ARCHITECTURE NOTE: We test both raw SQL and Prisma client queries
+ * because Prisma can return different error formats than raw queries
+ */
+async function validateDatabaseSchema(): Promise<void> {
+  try {
+    // Test 1: Raw SQL query (catches PostgreSQL errors)
+    try {
+      await prisma.$queryRaw`SELECT 1 FROM connector_connections LIMIT 1`;
+    } catch (rawErr: any) {
+      const rawErrorMsg = String(rawErr?.message || '');
+      if (rawErrorMsg.includes('does not exist') || rawErrorMsg.includes('relation')) {
+        throw new Error(`Table connector_connections does not exist: ${rawErrorMsg}`);
+      }
+      // If it's a different error, continue to Prisma client test
+    }
+    
+    // Test 2: Prisma client query (catches Prisma-specific errors)
+    // This is what the actual code uses, so we need to validate it works
+    try {
+      await prisma.connectorConnection.findMany({ take: 1 });
+    } catch (prismaErr: any) {
+      const prismaErrorMsg = String(prismaErr?.message || '');
+      const prismaErrorCode = String(prismaErr?.code || '');
+      
+      // Prisma error codes for missing table
+      if (
+        prismaErrorMsg.includes('does not exist') ||
+        prismaErrorMsg.includes('connector_connections') ||
+        prismaErrorCode === 'P2021' || // Table does not exist
+        prismaErrorCode === 'P1001'    // Can't reach database server (but also check message)
+      ) {
+        throw new Error(`Prisma: Table connector_connections does not exist: ${prismaErrorMsg}`);
+      }
+      // If it's a different Prisma error, re-throw it
+      throw prismaErr;
+    }
+    
+    console.log('✅ Database schema validated - connector_connections table exists');
+  } catch (err: any) {
+    // Check if error is due to missing table
+    const errorMessage = String(err?.message || '');
+    const errorCode = String(err?.code || '');
+    const isMissingTable = 
+      errorMessage.includes('does not exist') || 
+      errorMessage.includes('relation') || 
+      errorMessage.includes('table') ||
+      errorMessage.includes('connector_connections') ||
+      errorCode === '42P01' || // PostgreSQL: relation does not exist
+      errorCode === 'P2021';    // Prisma: table does not exist
+    
+    if (isMissingTable) {
+      console.error('❌ CRITICAL: Database schema not migrated!');
+      console.error('   Required table "connector_connections" does not exist.');
+      console.error('   Error:', errorMessage);
+      console.error('   Error Code:', errorCode);
+      console.error('   Run migrations: npx prisma migrate deploy');
+      console.error('   Or push schema: npx prisma db push (dev only)');
+      
+      if (process.env.NODE_ENV === 'production') {
+        console.error('   Production requires migrations - exiting to prevent runtime errors');
+        process.exit(1);
+      } else {
+        console.warn('   ⚠️  Development mode: Continuing with limited functionality');
+        console.warn('   ⚠️  Some endpoints will return 500 errors until migrations are run');
+      }
+    } else {
+      // Other database errors (connection, permissions, etc.)
+      console.error('❌ Database validation error:', errorMessage);
+      throw err;
+    }
+  }
+}
+
 // Start server
 if (require.main === module) {
-  // Test database connection on startup
+  // Test database connection and schema on startup
   prisma.$connect()
-    .then(() => {
+    .then(async () => {
       console.log('✅ Database connected - secure credential storage ready');
       
-      httpServer.listen(PORT, () => {
+      // Validate schema before starting server
+      await validateDatabaseSchema();
+      
+      httpServer.listen(PORT, '0.0.0.0', () => {
         console.log(`🔌 Connectors Service running on port ${PORT}`);
         console.log(`🔐 Secure Credential Storage: ${process.env.DATABASE_URL ? 'Enabled (AES-256-GCM)' : 'Disabled'}`);
         console.log(`📊 Bank Feed: ${process.env.ENABLE_BANK_FEED === 'true' ? 'Enabled' : 'Disabled'}`);
@@ -256,7 +342,7 @@ if (require.main === module) {
       }
       // In development, start without DB (limited functionality)
       console.warn('⚠️ Starting without database - secure credential storage unavailable');
-      httpServer.listen(PORT, () => {
+      httpServer.listen(PORT, '0.0.0.0', () => {
         console.log(`🔌 Connectors Service running on port ${PORT} (limited mode)`);
       });
     });

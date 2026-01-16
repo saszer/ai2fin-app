@@ -114,6 +114,21 @@ router.get('/bank/connections', async (req: AuthenticatedRequest, res: Response,
     }));
     
     res.json({ connections: safeConnections });
+  } catch (err: any) {
+    // CRITICAL: Handle database schema errors gracefully
+    // If migrations haven't been run, return a clear error message
+    const errorMessage = String(err?.message || '');
+    if (errorMessage.includes('Database schema not migrated') || errorMessage.includes('does not exist')) {
+      console.error('[Connectors] Database schema error:', errorMessage);
+      return res.status(503).json({
+        success: false,
+        error: 'Database schema not migrated',
+        message: 'Please run database migrations: npx prisma migrate deploy',
+        details: errorMessage
+      });
+    }
+    // For other errors, pass to error handler
+    next(err);
   } catch (error) {
     next(error);
   }

@@ -1,9 +1,12 @@
 # Wazuh - Filebeat configuration file
+# embracingearth.space
+# For local docker-compose: uses service name 'wazuh-indexer'
+# For production: uses 'localhost' or actual hostname
 output.elasticsearch:
-  hosts: ["https://localhost:9200"]
+  hosts: ["https://wazuh-indexer:9200"]
   protocol: https
   username: "admin"
-  password: "admin"
+  password: "${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}"
   ssl.verification_mode: none
   ssl.certificate_authorities: ["/etc/wazuh-indexer/certs/root-ca.pem"]
   ssl.certificate: "/etc/wazuh-indexer/certs/wazuh-indexer.pem"

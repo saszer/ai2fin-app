@@ -279,12 +279,30 @@ class SecureCredentialManager {
    * Get all connections for a user (credentials NOT included)
    */
   async getUserConnections(userId: string): Promise<SecureConnection[]> {
-    const connections = await prisma.connectorConnection.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    });
-    
-    return connections.map(c => this.toSecureConnection(c));
+    try {
+      const connections = await prisma.connectorConnection.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+      });
+      
+      return connections.map(c => this.toSecureConnection(c));
+    } catch (err: any) {
+      // CRITICAL: Handle missing table error gracefully
+      // This can happen if migrations haven't been run
+      const errorMessage = String(err?.message || '');
+      const errorCode = String(err?.code || '');
+      
+      if (
+        errorMessage.includes('does not exist') ||
+        errorMessage.includes('connector_connections') ||
+        errorCode === 'P2021'
+      ) {
+        throw new Error(
+          'Database schema not migrated. Run: npx prisma migrate deploy'
+        );
+      }
+      throw err;
+    }
   }
 
   /**
