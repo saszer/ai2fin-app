@@ -1,9 +1,13 @@
 # Wazuh - Filebeat configuration file
 # embracingearth.space
 # For local docker-compose: uses service name 'wazuh-indexer'
-# For production: uses 'localhost' or actual hostname
+# For production (Fly.io): uses 'localhost' since all services run in same container
+# CRITICAL: On Fly.io, Manager/Indexer/Dashboard run in single container via supervisord
+# So Filebeat must connect to localhost, not a separate service hostname
 output.elasticsearch:
-  hosts: ["https://wazuh-indexer:9200"]
+  # Use localhost for Fly.io single-container deployment
+  # For local docker-compose, override this with environment variable or separate config
+  hosts: ["https://localhost:9200"]
   protocol: https
   username: "admin"
   password: "${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}"
