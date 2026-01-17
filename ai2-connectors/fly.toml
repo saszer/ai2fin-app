@@ -35,4 +35,5 @@ primary_region = 'syd'
 [deploy]
   # Run database migrations before starting the app
   # embracingearth.space - Enterprise-grade deployment
-  release_command = "bash scripts/release.sh"
+  # CRITICAL: Use absolute path to bash to avoid docker-entrypoint.sh interference
+  release_command = "/bin/bash /app/scripts/release.sh"
