@@ -219,9 +219,11 @@ process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
 
 // CRITICAL: Handle uncaught exceptions from transport layer
 // ARCHITECTURE: We suppress Wazuh DNS errors but let other exceptions propagate
-const originalUncaughtException = process.listeners('uncaughtException');
+// Type for uncaughtException handler: (error: Error, origin: string) => void
+type UncaughtExceptionHandler = (error: Error, origin: string) => void;
+const originalUncaughtException = process.listeners('uncaughtException') as UncaughtExceptionHandler[];
 process.removeAllListeners('uncaughtException');
-process.on('uncaughtException', (error: Error) => {
+process.on('uncaughtException', (error: Error, origin: string) => {
   // Check if this is a Wazuh DNS/connection error
   const errorCode = (error as any).code;
   if ((errorCode === 'ENOTFOUND' || errorCode === 'ECONNREFUSED') && 
@@ -240,9 +242,10 @@ process.on('uncaughtException', (error: Error) => {
     return; // Don't exit - just log and continue
   }
   // For other uncaught exceptions, call original handlers
+  // ARCHITECTURE: uncaughtException handlers receive (error: Error, origin: string)
   originalUncaughtException.forEach(handler => {
     try {
-      handler(error);
+      handler(error, origin);
     } catch (e) {
       // Ignore handler errors
     }
