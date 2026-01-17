@@ -62,6 +62,9 @@ RUN npm install --omit=dev && \
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# CRITICAL: Copy instrument.js for Sentry (required by server.ts)
+# embracingearth.space - Enterprise error tracking
+COPY instrument.js ./instrument.js
 # Prisma schema already copied above
 
 # Switch to non-root user
@@ -75,4 +78,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3003/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
 # Start the application
-CMD ["node", "dist/server.js"] 
+CMD ["sh", "-c", "ls -la /app && ls -la /app/dist && node dist/server.js"] 
