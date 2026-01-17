@@ -9,7 +9,48 @@ const axios = require('axios');
 const BASE_URL = 'http://localhost:3001';
 const FRONTEND_URL = 'http://localhost:3000';
 
+// SECURITY FIX: SSRF protection for diagnostic script - embracingearth.space
+function validateUrl(url) {
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.toLowerCase();
+    const protocol = urlObj.protocol.toLowerCase();
+    
+    // Only allow http and https
+    if (protocol !== 'http:' && protocol !== 'https:') {
+      return false;
+    }
+    
+    // Only allow localhost for diagnostic script (prevents SSRF)
+    const allowedHosts = ['localhost', '127.0.0.1', '::1', '0.0.0.0'];
+    const isAllowed = allowedHosts.some(host => hostname === host || hostname.startsWith(host + '.'));
+    
+    // Block private IP ranges
+    if (!isAllowed) {
+      const privateIpPatterns = [
+        /^10\./,
+        /^172\.(1[6-9]|2[0-9]|3[01])\./,
+        /^192\.168\./,
+        /^169\.254\./,
+      ];
+      if (privateIpPatterns.some(pattern => pattern.test(hostname))) {
+        return false;
+      }
+    }
+    
+    return isAllowed;
+  } catch (error) {
+    return false;
+  }
+}
+
 async function testEndpoint(url, description, headers = {}) {
+  // SECURITY: Validate URL before making request (SSRF protection)
+  if (!validateUrl(url)) {
+    console.log(`   🚨 BLOCKED: ${description} - URL blocked by SSRF protection`);
+    return null;
+  }
+  
   try {
     console.log(`🧪 Testing: ${description}`);
     const response = await axios.get(url, { 
@@ -85,6 +126,11 @@ async function diagnoseLoadingIssue() {
   
   try {
     // Get detailed health status
+    // SECURITY: Validate URL before making request (SSRF protection)
+    if (!validateUrl(`${BASE_URL}/health`)) {
+      console.log('❌ Health check URL blocked by SSRF protection');
+      return;
+    }
     const healthResponse = await axios.get(`${BASE_URL}/health`);
     const health = healthResponse.data;
     
