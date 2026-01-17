@@ -22,9 +22,9 @@ primary_region = 'syd'
 [http_service]
   internal_port = 3003
   force_https = true
-  auto_stop_machines = 'stop'
+  auto_stop_machines = false  # Keep running for webhook reliability - embracingearth.space
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1  # Always keep 1 machine running for webhooks/Socket.io
   processes = ['app']
 
 [[vm]]
@@ -35,5 +35,5 @@ primary_region = 'syd'
 [deploy]
   # Run database migrations before starting the app
   # embracingearth.space - Enterprise-grade deployment
-  # CRITICAL: Use absolute path to bash to avoid docker-entrypoint.sh interference
-  release_command = "/bin/bash /app/scripts/release.sh"
+  # TEMPORARILY DISABLED - Testing Sentry upgrade
+  # release_command = "/bin/bash /app/scripts/release.sh"

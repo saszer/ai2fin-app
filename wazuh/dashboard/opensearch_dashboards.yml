@@ -3,11 +3,12 @@
 # Single-node setup for Fly.io
 # embracingearth.space
 #
-# Nginx proxy architecture: nginx listens on 5601 (Fly `internal_port`) and proxies UI to Dashboard on 5602
-# This avoids Fly routing/health-check issues during slow startup and keeps a stable public entrypoint.
+# SIMPLIFIED ARCHITECTURE: Dashboard binds directly to port 5601 (no nginx proxy)
+# This ensures Fly.io can detect the service during deployment scan
+# Health checks will fail during startup (15-20 min) but will pass once Dashboard is ready
 
 server.host: "::"
-server.port: 5602  # Dashboard UI (proxied by nginx on 5601)
+server.port: 5601  # Dashboard UI (direct binding for Fly.io)
 
 # OpenSearch connection with authentication
 # Using HTTPS for secure communication with Indexer

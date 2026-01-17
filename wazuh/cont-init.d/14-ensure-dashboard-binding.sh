@@ -1,12 +1,12 @@
 #!/usr/bin/with-contenv sh
-# Ensure Dashboard binds to [::]:5602 (IPv6 all interfaces)
-# Nginx proxy listens on 5601 (Fly `internal_port`) and proxies UI traffic to Dashboard on 5602.
+# Ensure Dashboard binds to [::]:5601 (IPv6 all interfaces)
+# SIMPLIFIED ARCHITECTURE: Dashboard binds directly to port 5601 (no nginx proxy)
 # Fly.io uses IPv6 internally, so we bind Dashboard to :: (not IPv4-only 0.0.0.0).
 # embracingearth.space
 
 set +e  # Don't exit on error
 
-echo "Ensuring Dashboard binds to [::]:5602 (IPv6 for Fly.io compatibility)..."
+echo "Ensuring Dashboard binds to [::]:5601 (IPv6 for Fly.io compatibility)..."
 
 DASHBOARD_CONFIG="/etc/wazuh-dashboard/opensearch_dashboards.yml"
 
@@ -42,25 +42,25 @@ else
     echo "✓ Dashboard config already has server.host: ::"
 fi
 
-# Nginx proxy architecture: Dashboard listens on 5602, nginx listens on 5601
-if ! grep -q "^server.port:.*5602" "$DASHBOARD_CONFIG" 2>/dev/null; then
-    echo "Fixing Dashboard port binding to 5602 (proxied behind nginx on 5601)..."
+# Direct binding architecture: Dashboard listens directly on 5601 (no nginx proxy)
+if ! grep -q "^server.port:.*5601" "$DASHBOARD_CONFIG" 2>/dev/null; then
+    echo "Fixing Dashboard port binding to 5601 (direct binding for Fly.io)..."
     
     # Remove any existing server.port line
     sed -i '/^server\.port:/d' "$DASHBOARD_CONFIG" 2>/dev/null || true
     
-    # Add correct port (5602 - proxied UI)
+    # Add correct port (5601 - direct binding)
     if grep -q "^server.host:" "$DASHBOARD_CONFIG" 2>/dev/null; then
         # Insert after server.host
-        sed -i '/^server\.host:/a server.port: 5602' "$DASHBOARD_CONFIG" 2>/dev/null || true
+        sed -i '/^server\.host:/a server.port: 5601' "$DASHBOARD_CONFIG" 2>/dev/null || true
     else
         # Add at beginning of file
-        sed -i '1i server.port: 5602' "$DASHBOARD_CONFIG" 2>/dev/null || true
+        sed -i '1i server.port: 5601' "$DASHBOARD_CONFIG" 2>/dev/null || true
     fi
     
-    echo "✓ Updated Dashboard config to use port 5602 (proxied UI)"
+    echo "✓ Updated Dashboard config to use port 5601 (direct binding)"
 else
-    echo "✓ Dashboard config already has server.port: 5602"
+    echo "✓ Dashboard config already has server.port: 5601"
 fi
 
 # Verify config

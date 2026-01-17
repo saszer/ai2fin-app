@@ -262,13 +262,17 @@ app.get('/api/test/sentry', (req, res) => {
   }
 });
 
-// Error handling middleware (after all routes)
 // CRITICAL: Sentry error handler must be set up AFTER all routes but BEFORE other error handlers
 // embracingearth.space - Enterprise error tracking
-// CRITICAL: Sentry error handler must be set up AFTER all routes but BEFORE other error handlers
-// embracingearth.space - Enterprise error tracking
+// Sentry v8: Error handling is automatic via expressIntegration, but we can add custom error tracking
 const Sentry = require('../instrument.js');
-Sentry.setupExpressErrorHandler(app);
+// In v8, error tracking happens automatically via expressIntegration
+// We just need to ensure errors are captured
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  // Capture error in Sentry
+  Sentry.captureException(err);
+  next(err);
+});
 
 // Custom error handler (after Sentry)
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
