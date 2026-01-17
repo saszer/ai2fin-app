@@ -138,32 +138,11 @@ trap 'echo "ERROR: Indexer exited with code $?"' EXIT
 export TMPDIR="/tmp/wazuh-indexer-tmp"
 export OPENSEARCH_JAVA_OPTS="-Djava.io.tmpdir=/tmp/wazuh-indexer-tmp"
 
-# CRITICAL: Fly.io volume mounts don't support user switching
-# Even with 777 permissions, wazuh-indexer can't access /var/ossec/data
-# Solution: Use /var/lib/wazuh-indexer/data (not on volume) for data directory
-echo "⚠ WARNING: Using non-volume data directory due to Fly.io volume mount restrictions"
-echo "  Data directory: /var/lib/wazuh-indexer/data (not persistent across restarts)"
-echo "  This is necessary because volumes don't support user switching"
-
-# Update opensearch.yml to use non-volume location
-if [ -f /etc/wazuh-indexer/opensearch.yml ]; then
-    # Check if already using non-volume location
-    if ! grep -q "path.data: /var/lib/wazuh-indexer/data" /etc/wazuh-indexer/opensearch.yml; then
-        # Backup original
-        cp /etc/wazuh-indexer/opensearch.yml /etc/wazuh-indexer/opensearch.yml.backup
-        
-        # Change path.data to non-volume location
-        sed -i 's|path.data: /var/ossec/data/wazuh-indexer-data|path.data: /var/lib/wazuh-indexer/data|' /etc/wazuh-indexer/opensearch.yml
-        
-        echo "✓ Updated opensearch.yml to use /var/lib/wazuh-indexer/data"
-    fi
-    
-    # Create the directory (not on volume - supports user switching)
-    mkdir -p /var/lib/wazuh-indexer/data
-    chown -R wazuh-indexer:wazuh-indexer /var/lib/wazuh-indexer/data
-    chmod -R 755 /var/lib/wazuh-indexer/data
-    
-    echo "✓ Data directory created: /var/lib/wazuh-indexer/data"
+# Ensure correct permissions on persistent data path
+if [ -d "/var/ossec/data/wazuh-indexer-data" ]; then
+    echo "Ensuring permissions on persistent data path..."
+    chown -R wazuh-indexer:wazuh-indexer /var/ossec/data/wazuh-indexer-data 2>/dev/null || true
+    chmod -R 777 /var/ossec/data/wazuh-indexer-data 2>/dev/null || true
 fi
 
 # Run as wazuh-indexer user (OpenSearch requires this - won't run as root)

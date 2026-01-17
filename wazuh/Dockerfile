@@ -22,6 +22,7 @@ COPY etc/shared/ar.conf /var/ossec/etc/shared/ar.conf
 # Copy init scripts for s6-overlay (runs before services start)
 # These scripts fix common issues like Filebeat lock conflicts
 # Note: Scripts run in alphabetical order (01-, 02-, etc.)
+COPY scripts/ /etc/cont-init.d/scripts/
 COPY cont-init.d/ /etc/cont-init.d/
 # Fix line endings (CRLF to LF) and set execute permissions
 RUN find /etc/cont-init.d/ -name "*.sh" -type f -exec sed -i 's/\r$//' {} \; && \

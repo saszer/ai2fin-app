@@ -195,17 +195,17 @@ chown -R wazuh-indexer:wazuh-indexer /var/log/wazuh-indexer 2>/dev/null || true
 chmod -R 755 /var/lib/wazuh-indexer
 chmod -R 755 /var/log/wazuh-indexer
 
-# CRITICAL: Create /var/lib/wazuh-indexer/data for non-volume location
-# Due to Fly.io volume mount restrictions, Indexer uses /var/lib/wazuh-indexer/data
-# (not on volume) instead of /var/ossec/data/wazuh-indexer-data
-# The wrapper script will also create it, but we create it here to ensure it exists
-echo "Creating non-volume Indexer data directory (Fly.io volume mount workaround)..."
-mkdir -p /var/lib/wazuh-indexer/data
-chown -R wazuh-indexer:wazuh-indexer /var/lib/wazuh-indexer/data 2>/dev/null || true
-chmod -R 755 /var/lib/wazuh-indexer/data 2>/dev/null || true
-echo "✓ Non-volume Indexer data directory created: /var/lib/wazuh-indexer/data"
-echo "  NOTE: This directory is NOT persistent across restarts (Fly.io limitation)"
-echo "  Data will be lost on container restart, but Indexer can start successfully"
+# ============================================================================
+# INDEXER DATA PERSISTENCE ENABLED
+# ============================================================================
+echo "Ensuring persistent data directory permissions..."
+
+# CRITICAL: Fix permissions recursively on the persistent volume
+# Fly.io volumes might have weird ownership, so we are aggressive here
+chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
+chmod -R 775 "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
+
+echo "✓ Indexer configured to use persistent data at: $INDEXER_PERSISTENT_DATA"
 
 # ============================================================================
 # DASHBOARD DATA PERSISTENCE
