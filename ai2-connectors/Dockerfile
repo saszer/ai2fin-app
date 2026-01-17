@@ -45,6 +45,8 @@ RUN adduser --system --uid 1001 nextjs
 # Copy Prisma schema and scripts first (needed for postinstall)
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/scripts ./scripts
+# CRITICAL: Make release script executable for Fly.io release command
+RUN chmod +x ./scripts/release.sh 2>/dev/null || true
 
 # Install only production dependencies for runtime
 # Use npm install (works with or without package-lock.json)
