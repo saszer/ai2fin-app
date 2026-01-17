@@ -5,6 +5,10 @@
 // Load environment variables FIRST - before any other imports
 import 'dotenv/config';
 
+// CRITICAL: Import Sentry instrumentation FIRST, before any other imports
+// embracingearth.space - Enterprise error tracking and monitoring
+require('../instrument.js');
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -103,6 +107,12 @@ app.use(sanitizeInput); // Sanitize all inputs
 app.use(wazuhSecurityMiddleware); // Detect SQL injection, XSS, path traversal
 app.use(wazuhRequestLogger);       // Log all API access to Wazuh
 wazuhLogger.info('SERVER_START', { port: PORT, environment: process.env.NODE_ENV });
+
+// CRITICAL: Sentry request handler must be BEFORE routes to capture request context
+// embracingearth.space - Enterprise error tracking
+const Sentry = require('../instrument.js');
+app.use(Sentry.Handlers.requestHandler()); // Captures request context for all routes
+app.use(Sentry.Handlers.tracingHandler()); // Performance monitoring
 
 // Rate limiting for webhook endpoints (security: prevent DDoS)
 // Architecture: User/connection-based rate limiting (not IP-based) for scalability
@@ -229,6 +239,47 @@ app.get('/api/connectors/status', (req, res) => {
       'api-integration'
     ],
     version: '1.0.0'
+  });
+});
+
+// Sentry test endpoint - for verifying error tracking
+// embracingearth.space - Test endpoint to verify Sentry integration
+app.get('/api/test/sentry', (req, res) => {
+  const Sentry = require('../instrument.js');
+  
+  try {
+    // Intentional error to test Sentry
+    // @ts-ignore - This is an intentional error for testing Sentry
+    foo(); // This function doesn't exist, will throw ReferenceError
+  } catch (e) {
+    Sentry.captureException(e);
+    res.json({
+      success: true,
+      message: 'Error captured and sent to Sentry',
+      error: e.message,
+      timestamp: new Date().toISOString(),
+      note: 'Check your Sentry dashboard to verify the error was received'
+    });
+  }
+});
+
+// Error handling middleware (after all routes)
+// CRITICAL: Sentry error handler must be set up AFTER all routes but BEFORE other error handlers
+// embracingearth.space - Enterprise error tracking
+const SentryErrorHandler = require('../instrument.js');
+app.use(SentryErrorHandler.Handlers.errorHandler());
+
+// Custom error handler (after Sentry)
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  // Use existing error handling
+  if (res.headersSent) {
+    return next(err);
+  }
+  
+  // Return error response
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal server error',
+    timestamp: new Date().toISOString()
   });
 });
 
