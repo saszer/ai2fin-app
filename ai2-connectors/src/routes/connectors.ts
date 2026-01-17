@@ -129,8 +129,6 @@ router.get('/bank/connections', async (req: AuthenticatedRequest, res: Response,
     }
     // For other errors, pass to error handler
     next(err);
-  } catch (error) {
-    next(error);
   }
 });
 
