@@ -8,9 +8,8 @@ const Sentry = require('@sentry/node');
 
 // Only initialize if not already initialized (avoid double init)
 // Only initialize if not already initialized (avoid double init)
-// V8+ compatibility: getClient() is top-level, getCurrentHub() is removed
-const client = Sentry.getClient ? Sentry.getClient() : (Sentry.getCurrentHub ? Sentry.getCurrentHub().getClient() : undefined);
-if (!client) {
+// V8+ compatibility: getClient() is the correct way to check initialization
+if (!Sentry.getClient()) {
   // Initialize Sentry as early as possible in application lifecycle
   Sentry.init({
     dsn: process.env.SENTRY_DSN || 'https://b09f3ace235939102c2f2eaf4fa58327@o4510689032208384.ingest.us.sentry.io/4510689032536064',

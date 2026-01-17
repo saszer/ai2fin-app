@@ -110,9 +110,8 @@ wazuhLogger.info('SERVER_START', { port: PORT, environment: process.env.NODE_ENV
 
 // CRITICAL: Sentry request handler must be BEFORE routes to capture request context
 // embracingearth.space - Enterprise error tracking
-const Sentry = require('../instrument.js');
-app.use(Sentry.Handlers.requestHandler()); // Captures request context for all routes
-app.use(Sentry.Handlers.tracingHandler()); // Performance monitoring
+// Sentry v8 handles request isolation automatically via AsyncLocalStorage
+// No need for explicit requestHandler or tracingHandler middleware in v8
 
 // Rate limiting for webhook endpoints (security: prevent DDoS)
 // Architecture: User/connection-based rate limiting (not IP-based) for scalability
@@ -121,7 +120,7 @@ app.use(Sentry.Handlers.tracingHandler()); // Performance monitoring
 if (process.env.NODE_ENV === 'production') {
   try {
     const rateLimit = require('express-rate-limit');
-    
+
     // Connection-based rate limiting (scalable for shared IPs)
     const webhookLimiter = rateLimit({
       windowMs: 1 * 60 * 1000, // 1 minute
@@ -134,11 +133,11 @@ if (process.env.NODE_ENV === 'production') {
         // Try to extract connectionId from webhook payload
         const body = req.body || {};
         const connectionId = body.data?.connectionId || body.connectionId || body.data?.connection?.id;
-        
+
         if (connectionId) {
           return `connection:${connectionId}`; // Rate limit per connection
         }
-        
+
         // Fallback: Use IP + user agent for unknown connections
         const ip = req.ip || req.connection.remoteAddress;
         const userAgent = req.headers['user-agent'] || 'unknown';
@@ -150,7 +149,7 @@ if (process.env.NODE_ENV === 'production') {
         return serviceSecret === process.env.SERVICE_SECRET;
       }
     });
-    
+
     // Apply to webhook endpoints
     app.use('/api/connectors/*/webhook', webhookLimiter);
     console.log('🔒 Connection-based rate limiting enabled for webhook endpoints');
@@ -181,7 +180,7 @@ app.get('/api/connectors/diagnostic/jwt-config', (req, res) => {
     jwtSecretConfigured: !!jwtSecret,
     jwtSecretLength: jwtSecret ? jwtSecret.length : 0,
     jwtSecretHash: jwtSecret ? require('crypto').createHash('sha256').update(jwtSecret).digest('hex').substring(0, 16) : null,
-    message: jwtSecret 
+    message: jwtSecret
       ? 'JWT_SECRET is configured. Compare the hash with core app to verify they match.'
       : 'CRITICAL: JWT_SECRET is not configured!',
     instructions: 'Run: fly secrets get JWT_SECRET -a ai2-core-api and compare with connectors service'
@@ -246,7 +245,7 @@ app.get('/api/connectors/status', (req, res) => {
 // embracingearth.space - Test endpoint to verify Sentry integration
 app.get('/api/test/sentry', (req, res) => {
   const Sentry = require('../instrument.js');
-  
+
   try {
     // Intentional error to test Sentry
     // @ts-ignore - This is an intentional error for testing Sentry
@@ -266,8 +265,10 @@ app.get('/api/test/sentry', (req, res) => {
 // Error handling middleware (after all routes)
 // CRITICAL: Sentry error handler must be set up AFTER all routes but BEFORE other error handlers
 // embracingearth.space - Enterprise error tracking
-const SentryErrorHandler = require('../instrument.js');
-app.use(SentryErrorHandler.Handlers.errorHandler());
+// CRITICAL: Sentry error handler must be set up AFTER all routes but BEFORE other error handlers
+// embracingearth.space - Enterprise error tracking
+const Sentry = require('../instrument.js');
+Sentry.setupExpressErrorHandler(app);
 
 // Custom error handler (after Sentry)
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -275,7 +276,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   if (res.headersSent) {
     return next(err);
   }
-  
+
   // Return error response
   res.status(err.status || 500).json({
     error: err.message || 'Internal server error',
@@ -308,7 +309,7 @@ async function validateDatabaseSchema(): Promise<void> {
       }
       // If it's a different error, continue to Prisma client test
     }
-    
+
     // Test 2: Prisma client query (catches Prisma-specific errors)
     // This is what the actual code uses, so we need to validate it works
     try {
@@ -316,7 +317,7 @@ async function validateDatabaseSchema(): Promise<void> {
     } catch (prismaErr: any) {
       const prismaErrorMsg = String(prismaErr?.message || '');
       const prismaErrorCode = String(prismaErr?.code || '');
-      
+
       // Prisma error codes for missing table
       if (
         prismaErrorMsg.includes('does not exist') ||
@@ -329,20 +330,20 @@ async function validateDatabaseSchema(): Promise<void> {
       // If it's a different Prisma error, re-throw it
       throw prismaErr;
     }
-    
+
     console.log('✅ Database schema validated - connector_connections table exists');
   } catch (err: any) {
     // Check if error is due to missing table
     const errorMessage = String(err?.message || '');
     const errorCode = String(err?.code || '');
-    const isMissingTable = 
-      errorMessage.includes('does not exist') || 
-      errorMessage.includes('relation') || 
+    const isMissingTable =
+      errorMessage.includes('does not exist') ||
+      errorMessage.includes('relation') ||
       errorMessage.includes('table') ||
       errorMessage.includes('connector_connections') ||
       errorCode === '42P01' || // PostgreSQL: relation does not exist
       errorCode === 'P2021';    // Prisma: table does not exist
-    
+
     if (isMissingTable) {
       console.error('❌ CRITICAL: Database schema not migrated!');
       console.error('   Required table "connector_connections" does not exist.');
@@ -354,7 +355,7 @@ async function validateDatabaseSchema(): Promise<void> {
       console.error('   2. Or push schema: npx prisma db push --accept-data-loss');
       console.error('   3. Check release command in fly.toml - migrations should run automatically');
       console.error('');
-      
+
       if (process.env.NODE_ENV === 'production') {
         // In production, try to auto-fix using db push as last resort
         // This is safer than crashing, but migrations should have run in release command
@@ -395,10 +396,10 @@ if (require.main === module) {
   prisma.$connect()
     .then(async () => {
       console.log('✅ Database connected - secure credential storage ready');
-      
+
       // Validate schema before starting server
       await validateDatabaseSchema();
-      
+
       httpServer.listen(PORT, '0.0.0.0', () => {
         console.log(`🔌 Connectors Service running on port ${PORT}`);
         console.log(`🔐 Secure Credential Storage: ${process.env.DATABASE_URL ? 'Enabled (AES-256-GCM)' : 'Disabled'}`);

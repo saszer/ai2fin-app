@@ -83,26 +83,27 @@ RUN mkdir -p /var/lib/wazuh-dashboard && \
     chown -R wazuh-dashboard:wazuh-dashboard /usr/share/wazuh-dashboard/data
 
 # Copy init scripts
+COPY scripts/ /etc/cont-init.d/scripts/
 COPY cont-init.d/ /etc/cont-init.d/
 RUN find /etc/cont-init.d/ -name "*.sh" -type f -exec sed -i 's/\r$//' {} \; && \
     chmod +x /etc/cont-init.d/*.sh 2>/dev/null || true
 
-# Dashboard listens on 5602 (proxied by nginx on 5601)
+# Dashboard listens on 5601 (Direct binding, no nginx proxy)
 # CRITICAL: Fly.io uses IPv6 internally! Must bind to :: not 0.0.0.0
 RUN if [ -f /etc/wazuh-dashboard/opensearch_dashboards.yml ]; then \
     sed -i 's/^server\.host:.*/server.host: "::"/' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || true; \
-    sed -i 's/^server\.port:.*/server.port: 5602/' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || true; \
+    sed -i 's/^server\.port:.*/server.port: 5601/' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || true; \
     if ! grep -q "^server\.host:" /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null; then \
         sed -i '/^server\.port:/a server.host: "::"' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || \
         echo 'server.host: "::"' >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \
     fi; \
     if ! grep -q "^server\.port:" /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null; then \
-        echo "server.port: 5602" >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \
+        echo "server.port: 5601" >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \
     fi; \
     fi
 
 # Copy helper scripts
-COPY scripts/ /etc/cont-init.d/scripts/
+# (Redundant copy removed to avoid confusion, handled above)
 RUN mkdir -p /etc/cont-init.d/scripts && \
     find /etc/cont-init.d/scripts/ -name "*.sh" -type f -exec sed -i 's/\r$//' {} \; && \
     chmod +x /etc/cont-init.d/scripts/*.sh 2>/dev/null || true && \
@@ -111,9 +112,9 @@ RUN mkdir -p /etc/cont-init.d/scripts && \
 # Ensure wait script is executable
 RUN chmod +x /etc/cont-init.d/scripts/wait-for-indexer-and-start-dashboard.sh 2>/dev/null || true
 
-# Nginx proxy config (public entrypoint on 5601)
-RUN mkdir -p /etc/nginx/conf.d
-COPY scripts/nginx-health-proxy.conf /etc/nginx/nginx.conf
+# Nginx proxy config REMOVED - Direct binding used
+# RUN mkdir -p /etc/nginx/conf.d
+# COPY scripts/nginx-health-proxy.conf /etc/nginx/nginx.conf
 
 # Create log directories
 RUN mkdir -p /var/log/supervisor && \
@@ -164,12 +165,12 @@ echo "Starting supervisord..."\n\
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf\n\
 ' > /start.sh && chmod +x /start.sh
 
-# Expose ports (5601 nginx public entrypoint; 5602 dashboard UI behind nginx; 8080 internal health server)
-EXPOSE 55000 9200 5601 5602 8080
+# Expose ports (5601 Dashboard UI direct; 55000 API; 9200 Indexer)
+EXPOSE 55000 9200 5601
 
-# Health check - Check nginx /health (proxied to internal health server)
+# Health check - Check Dashboard API status directly
 HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
-  CMD curl -f http://localhost:5601/health || exit 1
+  CMD curl -f http://localhost:5601/api/status || exit 1
 
 # Start script (runs init scripts then supervisord)
 CMD ["/start.sh"]
