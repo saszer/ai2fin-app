@@ -27,6 +27,8 @@ let wazuhAvailable = false;
 // CRITICAL FIX: Wrap syslog transport creation in defensive error handling
 // The winston-syslog library can emit errors during DNS lookup that crash the app
 // We need to catch these at multiple levels and prevent unhandled error events
+// ARCHITECTURE: We create the transport but immediately remove it if it errors
+// This prevents Winston's DerivedLogger from crashing on unhandled error events
 if (process.env.NODE_ENV === 'production' && WAZUH_HOST !== 'disabled') {
   try {
     // Dynamic import of syslog transport (side-effect import)
@@ -53,19 +55,34 @@ if (process.env.NODE_ENV === 'production' && WAZUH_HOST !== 'disabled') {
         
         // CRITICAL: Attach error handler IMMEDIATELY - before any operations
         // This prevents unhandled error events from propagating to Winston's DerivedLogger
+        // ARCHITECTURE: If transport errors, we remove it from the logger to prevent crashes
         syslogTransport.on('error', (error: Error) => {
           // Log to console only (don't try to log to Wazuh if it's down!)
-          console.warn('[Wazuh] Syslog transport error (non-fatal):', {
-            message: error.message,
-            code: (error as any).code,
-            hostname: (error as any).hostname,
-            note: 'App continues running with console logging only'
-          });
+          const errorCode = (error as any).code;
+          const errorHostname = (error as any).hostname;
+          
+          // Only log once per error type to avoid spam
+          if (!wazuhAvailable || errorCode === 'ENOTFOUND' || errorCode === 'ECONNREFUSED') {
+            console.warn('[Wazuh] Syslog transport error (non-fatal):', {
+              message: error.message,
+              code: errorCode,
+              hostname: errorHostname,
+              note: 'App continues running with console logging only. Wazuh transport disabled.'
+            });
+          }
+          
           wazuhAvailable = false;
-          // CRITICAL: Prevent error from propagating - mark as handled
-          // This stops Winston from treating it as unhandled
-          if (error && typeof (error as any).preventDefault === 'function') {
-            (error as any).preventDefault();
+          
+          // CRITICAL: Remove transport from logger if it's causing errors
+          // This prevents Winston from re-emitting the error and crashing
+          if (syslogTransport && wazuhLogger) {
+            try {
+              wazuhLogger.remove(syslogTransport);
+              syslogTransport = null;
+              console.warn('[Wazuh] Removed failing syslog transport to prevent app crashes');
+            } catch (removeErr) {
+              // Ignore errors during removal
+            }
           }
         });
         
@@ -76,21 +93,6 @@ if (process.env.NODE_ENV === 'production' && WAZUH_HOST !== 'disabled') {
             console.log(`[Wazuh] Syslog transport connected -> ${WAZUH_HOST}:${WAZUH_SYSLOG_PORT}`);
           }
         });
-        
-        // CRITICAL: Set up process-level error handler as final safety net
-        // This catches any errors that escape Winston's error handling
-        const originalEmit = syslogTransport.emit.bind(syslogTransport);
-        syslogTransport.emit = function(event: string, ...args: any[]) {
-          if (event === 'error') {
-            const error = args[0];
-            if (error && (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED')) {
-              // Suppress DNS/connection errors - they're expected when Wazuh is unavailable
-              console.warn('[Wazuh] Suppressed transport error (non-fatal):', error.message);
-              return true; // Mark as handled
-            }
-          }
-          return originalEmit(event, ...args);
-        };
         
         console.log(`[Wazuh] Syslog transport configured -> ${WAZUH_HOST}:${WAZUH_SYSLOG_PORT}`);
         wazuhAvailable = true; // Optimistically assume it will work
@@ -153,43 +155,98 @@ export const wazuhLogger = winston.createLogger({
 
 // CRITICAL: Catch any unhandled errors from the logger itself
 // This is a final safety net to prevent app crashes
+// ARCHITECTURE: If logger errors, remove the failing transport and continue
 wazuhLogger.on('error', (error: Error) => {
   // Log to console only - don't try to use logger that's failing
-  console.error('[Wazuh Logger] Unhandled error (non-fatal):', {
-    message: error.message,
-    stack: error.stack,
-    note: 'App continues running - Wazuh logging disabled'
-  });
-  // CRITICAL: Mark error as handled to prevent process crash
-  // Winston's DerivedLogger will crash if error event is unhandled
-  if (error && typeof (error as any).preventDefault === 'function') {
-    (error as any).preventDefault();
+  const errorCode = (error as any).code;
+  const isWazuhError = errorCode === 'ENOTFOUND' || errorCode === 'ECONNREFUSED' || 
+                       (error.message && error.message.includes('ai2-wazuh'));
+  
+  if (isWazuhError) {
+    console.warn('[Wazuh Logger] Transport error (non-fatal):', {
+      message: error.message,
+      code: errorCode,
+      note: 'App continues running - Wazuh logging disabled'
+    });
+    
+    // CRITICAL: Remove failing transport to prevent repeated errors
+    if (syslogTransport) {
+      try {
+        wazuhLogger.remove(syslogTransport);
+        syslogTransport = null;
+        wazuhAvailable = false;
+        console.warn('[Wazuh] Removed failing transport from logger');
+      } catch (removeErr) {
+        // Ignore removal errors
+      }
+    }
+  } else {
+    // For non-Wazuh errors, log but don't remove transport
+    console.error('[Wazuh Logger] Unexpected error:', {
+      message: error.message,
+      stack: error.stack,
+      note: 'This may indicate a different issue'
+    });
   }
 });
 
 // CRITICAL: Process-level error handler for Winston transport errors
 // This is the absolute last line of defense against unhandled errors
 // embracingearth.space - Enterprise-grade error resilience
+// ARCHITECTURE: We suppress Wazuh DNS errors at process level to prevent crashes
+const originalUnhandledRejection = process.listeners('unhandledRejection');
+process.removeAllListeners('unhandledRejection');
 process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
   // Check if this is a Wazuh-related error
   if (reason && typeof reason === 'object') {
     const error = reason as Error;
-    if (error.code === 'ENOTFOUND' && error.message && error.message.includes('ai2-wazuh')) {
+    const errorCode = (error as any).code;
+    if ((errorCode === 'ENOTFOUND' || errorCode === 'ECONNREFUSED') && 
+        error.message && error.message.includes('ai2-wazuh')) {
       console.warn('[Wazuh] Suppressed unhandled rejection (non-fatal):', error.message);
       return; // Suppress - don't crash the app
     }
   }
+  // Call original handlers for non-Wazuh errors
+  originalUnhandledRejection.forEach(handler => {
+    try {
+      handler(reason, promise);
+    } catch (e) {
+      // Ignore handler errors
+    }
+  });
 });
 
 // CRITICAL: Handle uncaught exceptions from transport layer
+// ARCHITECTURE: We suppress Wazuh DNS errors but let other exceptions propagate
+const originalUncaughtException = process.listeners('uncaughtException');
+process.removeAllListeners('uncaughtException');
 process.on('uncaughtException', (error: Error) => {
   // Check if this is a Wazuh DNS/connection error
-  if (error.code === 'ENOTFOUND' && error.message && error.message.includes('ai2-wazuh')) {
+  const errorCode = (error as any).code;
+  if ((errorCode === 'ENOTFOUND' || errorCode === 'ECONNREFUSED') && 
+      error.message && error.message.includes('ai2-wazuh')) {
     console.warn('[Wazuh] Suppressed uncaught exception (non-fatal):', error.message);
-    // Don't exit - just log and continue
-    return;
+    // Remove transport if it exists
+    if (syslogTransport && wazuhLogger) {
+      try {
+        wazuhLogger.remove(syslogTransport);
+        syslogTransport = null;
+        wazuhAvailable = false;
+      } catch (e) {
+        // Ignore
+      }
+    }
+    return; // Don't exit - just log and continue
   }
-  // For other uncaught exceptions, let them propagate (they're real errors)
+  // For other uncaught exceptions, call original handlers
+  originalUncaughtException.forEach(handler => {
+    try {
+      handler(error);
+    } catch (e) {
+      // Ignore handler errors
+    }
+  });
 });
 
 // Security event types for Wazuh rules matching

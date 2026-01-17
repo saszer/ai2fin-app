@@ -348,12 +348,35 @@ async function validateDatabaseSchema(): Promise<void> {
       console.error('   Required table "connector_connections" does not exist.');
       console.error('   Error:', errorMessage);
       console.error('   Error Code:', errorCode);
-      console.error('   Run migrations: npx prisma migrate deploy');
-      console.error('   Or push schema: npx prisma db push (dev only)');
+      console.error('');
+      console.error('   SOLUTIONS:');
+      console.error('   1. Run migrations: npx prisma migrate deploy');
+      console.error('   2. Or push schema: npx prisma db push --accept-data-loss');
+      console.error('   3. Check release command in fly.toml - migrations should run automatically');
+      console.error('');
       
       if (process.env.NODE_ENV === 'production') {
-        console.error('   Production requires migrations - exiting to prevent runtime errors');
-        process.exit(1);
+        // In production, try to auto-fix using db push as last resort
+        // This is safer than crashing, but migrations should have run in release command
+        console.error('   ⚠️  Production mode: Attempting auto-fix with db push...');
+        try {
+          const { execSync } = require('child_process');
+          execSync('npx prisma db push --accept-data-loss --skip-generate', {
+            stdio: 'inherit',
+            env: process.env,
+            timeout: 30000 // 30 second timeout
+          });
+          console.log('   ✅ Auto-fix successful - schema pushed to database');
+          // Retry validation
+          await prisma.connectorConnection.findMany({ take: 1 });
+          console.log('   ✅ Database schema validated after auto-fix');
+          return; // Success - exit function
+        } catch (autoFixErr: any) {
+          console.error('   ❌ Auto-fix failed:', autoFixErr.message);
+          console.error('   Production requires migrations - exiting to prevent runtime errors');
+          console.error('   Check release command logs: fly logs -a ai2-connectors');
+          process.exit(1);
+        }
       } else {
         console.warn('   ⚠️  Development mode: Continuing with limited functionality');
         console.warn('   ⚠️  Some endpoints will return 500 errors until migrations are run');

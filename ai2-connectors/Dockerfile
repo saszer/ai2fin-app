@@ -48,8 +48,12 @@ COPY --from=builder /app/scripts ./scripts
 
 # Install only production dependencies for runtime
 # Use npm install (works with or without package-lock.json)
+# CRITICAL: Also install Prisma CLI for release command (migrations)
+# embracingearth.space - Database migrations run in release command
 COPY package.json package-lock.json* ./
-RUN npm install --omit=dev && npm cache clean --force
+RUN npm install --omit=dev && \
+    npm install -g prisma@^5.7.1 && \
+    npm cache clean --force
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
