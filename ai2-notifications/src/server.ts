@@ -1,4 +1,4 @@
-import express from 'express';
+import '../instrument'; // Sentry initialization - must be first\nimport express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { authenticateToken, serviceAuth } from './middleware/auth';
@@ -50,7 +50,7 @@ app.get('/api/notifications/status', (req, res) => {
 app.post('/api/notifications/send', authenticateToken, async (req, res) => {
   try {
     const { type, recipient, subject, message, priority = 'normal' } = req.body;
-    
+
     // Mock notification sending
     const notification = {
       id: `notif_${Date.now()}`,
@@ -85,7 +85,7 @@ app.post('/api/notifications/send', authenticateToken, async (req, res) => {
 app.post('/api/notifications/batch', async (req, res) => {
   try {
     const { notifications } = req.body;
-    
+
     const results = notifications.map((notif: any) => ({
       id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       originalId: notif.id,
@@ -112,7 +112,7 @@ app.post('/api/notifications/batch', async (req, res) => {
 app.get('/api/notifications/history', async (req, res) => {
   try {
     const { limit = 50, offset = 0 } = req.query;
-    
+
     // Mock notification history
     const history = Array.from({ length: Math.min(Number(limit), 50) }, (_, i) => ({
       id: `notif_${Date.now() - i * 1000}`,
@@ -145,7 +145,7 @@ app.get('/api/notifications/history', async (req, res) => {
 app.post('/api/notifications/templates', async (req, res) => {
   try {
     const { name, type, subject, body, variables } = req.body;
-    
+
     // Mock template creation
     const template = {
       id: `template_${Date.now()}`,

@@ -1,4 +1,4 @@
-import express from 'express';
+import '../instrument'; // Sentry initialization - must be first\nimport express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import exportRoutes from './routes/exports';
@@ -19,17 +19,17 @@ const corsOptions = {
       'http://127.0.0.1:3000',
       'http://127.0.0.1:3001'
     ];
-    
+
     // Allow requests with no origin (mobile apps, etc.) - but log them
     if (!origin) {
       console.log('🔍 Analytics CORS: No origin request - allowing but logging');
       return callback(null, true);
     }
-    
+
     // Handle trailing slashes and normalize origins
     const normalizedOrigin = origin.endsWith('/') ? origin.slice(0, -1) : origin;
     const isAllowed = allowedOrigins.includes(normalizedOrigin) || allowedOrigins.includes(origin);
-    
+
     if (isAllowed) {
       console.log('✅ Analytics CORS: Origin allowed -', origin);
       callback(null, true);
@@ -51,11 +51,11 @@ const corsOptions = {
 if (ORIGIN_LOCK_ENABLED && ORIGIN_SHARED_SECRET) {
   app.use((req, res, next) => {
     if (process.env.NODE_ENV === 'development') return next();
-    
+
     // Allow internal Fly.io calls and health checks to bypass origin lock
     const isInternalCall = req.ip === '127.0.0.1' || req.ip === '::1' || req.ip === '::ffff:127.0.0.1';
     const isHealthCheck = req.path === '/health' || req.path === '/api/analytics/health';
-    
+
     if (isInternalCall || isHealthCheck) {
       console.log('🔓 Analytics: Internal call bypassing origin lock', {
         path: req.originalUrl,
@@ -64,7 +64,7 @@ if (ORIGIN_LOCK_ENABLED && ORIGIN_SHARED_SECRET) {
       });
       return next();
     }
-    
+
     const received = String(req.headers[ORIGIN_HEADER_NAME] || '');
     if (received !== ORIGIN_SHARED_SECRET) {
       console.warn('🔒 Analytics origin lock rejection', {
@@ -164,7 +164,7 @@ const deduplicationMiddleware = (req: any, res: any, next: any) => {
   const userId = req.headers['x-user-id'] || req.ip;
   const requestKey = `${req.method}-${req.path}-${userId}-${JSON.stringify(req.body)}`;
   const now = Date.now();
-  
+
   // Check if this exact request was made recently
   if (requestCache.has(requestKey)) {
     const cached = requestCache.get(requestKey);
@@ -177,24 +177,24 @@ const deduplicationMiddleware = (req: any, res: any, next: any) => {
       });
     }
   }
-  
+
   // Cache this request
   requestCache.set(requestKey, { timestamp: now });
-  
+
   // Clean old cache entries
   for (const [key, value] of requestCache.entries()) {
     if (now - value.timestamp > REQUEST_CACHE_TTL) {
       requestCache.delete(key);
     }
   }
-  
+
   next();
 };
 
 const concurrentLimitMiddleware = (req: any, res: any, next: any) => {
   const userId = req.headers['x-user-id'] || req.ip;
   const requestKey = `${userId}-${Date.now()}`;
-  
+
   // Check if user has too many active requests
   const userActiveRequests = Array.from(activeRequests.keys()).filter(key => key.startsWith(userId));
   if (userActiveRequests.length >= MAX_CONCURRENT_EXPORTS) {
@@ -204,19 +204,19 @@ const concurrentLimitMiddleware = (req: any, res: any, next: any) => {
       retryAfter: '30 seconds'
     });
   }
-  
+
   // Track this request
   activeRequests.set(requestKey, { startTime: Date.now(), userId });
-  
+
   // Clean up when request completes
   res.on('finish', () => {
     activeRequests.delete(requestKey);
   });
-  
+
   res.on('close', () => {
     activeRequests.delete(requestKey);
   });
-  
+
   next();
 };
 
@@ -254,7 +254,7 @@ class EnterpriseCache {
   private cleanup(): void {
     const now = Date.now();
     const entries = Array.from(this.cache.entries());
-    
+
     // Remove expired entries
     entries.forEach(([key, entry]) => {
       if (now - entry.timestamp > this.CACHE_TTL) {
@@ -267,7 +267,7 @@ class EnterpriseCache {
       const sortedEntries = entries
         .filter(([key]) => this.cache.has(key))
         .sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
-      
+
       const toRemove = sortedEntries.slice(0, Math.floor(this.MAX_CACHE_SIZE / 2));
       toRemove.forEach(([key]) => this.cache.delete(key));
     }
@@ -357,7 +357,7 @@ app.use((req, res, next) => {
 app.get('/health', (req, res) => {
   const memoryUsage = process.memoryUsage();
   const uptime = process.uptime();
-  
+
   res.json({
     status: 'healthy',
     service: 'analytics',
@@ -410,7 +410,7 @@ app.get('/api/analytics/status', (req, res) => {
 app.get('/api/analytics/health', (req, res) => {
   const memoryUsage = process.memoryUsage();
   const uptime = process.uptime();
-  
+
   res.json({
     status: 'healthy',
     service: 'analytics',
@@ -453,7 +453,7 @@ app.use(exportRoutes);
 app.post('/api/analytics/generate-report', async (req, res) => {
   try {
     const { reportType, dateRange, filters } = req.body;
-    
+
     // Mock report generation
     const report = {
       id: `report_${Date.now()}`,
@@ -493,7 +493,7 @@ app.post('/api/analytics/generate-report', async (req, res) => {
 app.post('/api/analytics/export-data', async (req, res) => {
   try {
     const { format, dataType, filters } = req.body;
-    
+
     // Mock data export
     const exportResult = {
       id: `export_${Date.now()}`,

@@ -1,4 +1,4 @@
-import dotenv from 'dotenv';
+import '../instrument'; // Sentry initialization - must be first\nimport dotenv from 'dotenv';
 import path from 'path';
 
 // Load environment variables from multiple possible locations
@@ -68,19 +68,19 @@ const corsOptions = {
       'http://127.0.0.1:3000',
       'http://127.0.0.1:3001'
     ];
-    
+
     console.log('🔍 AI Modules CORS Check:', { origin, allowedOrigins });
-    
+
     // Allow requests with no origin (mobile apps, etc.)
     if (!origin) {
       console.log('✅ AI Modules CORS: No origin - allowing');
       return callback(null, true);
     }
-    
+
     // Handle trailing slashes and normalize origins
     const normalizedOrigin = origin.endsWith('/') ? origin.slice(0, -1) : origin;
     const isAllowed = allowedOrigins.includes(normalizedOrigin) || allowedOrigins.includes(origin);
-    
+
     if (isAllowed) {
       console.log('✅ AI Modules CORS: Origin allowed -', origin);
       callback(null, true);
@@ -142,11 +142,11 @@ app.use((req, res, next) => {
   res.on('finish', () => {
     const responseTime = Date.now() - startTime;
     const { statusCode } = res;
-    
+
     // Log to console with emoji for easy reading
     const statusEmoji = statusCode >= 400 ? '❌' : '✅';
     console.log(`${statusEmoji} AI Modules: ${method} ${url} - ${statusCode} (${responseTime}ms)`);
-    
+
     // Also write to winston logger for file persistence
     const logger = require('./logger').default;
     logger.info('HTTP Request', {
@@ -227,9 +227,9 @@ app.post('/:userId/analyze', async (req, res) => {
   try {
     const { userId } = req.params;
     const { transactions, userProfile, options = {} } = req.body;
-    
+
     console.log(`🎯 User-specific analyze request for user: ${userId}`);
-    
+
     if (!transactions || !Array.isArray(transactions)) {
       return res.status(400).json({
         success: false,
@@ -240,7 +240,7 @@ app.post('/:userId/analyze', async (req, res) => {
 
     // Process the transactions using the same logic as the simple analyze endpoint
     const results = [];
-    
+
     for (const transaction of transactions) {
       // Mock analysis for now (replace with real AI when API key is configured)
       const analysis = {
@@ -254,7 +254,7 @@ app.post('/:userId/analyze', async (req, res) => {
         primaryType: transaction.amount > 0 ? 'income' : 'expense',
         processedAt: new Date().toISOString()
       };
-      
+
       results.push(analysis);
     }
 
@@ -305,7 +305,7 @@ app.use('/api', aiRoutes);  // This makes /api/classify available directly
 app.post('/api/classify', async (req, res) => {
   try {
     const { description, amount, type, merchant, category, userId } = req.body;
-    
+
     if (!description || amount === undefined) {
       return res.status(400).json({
         success: false,
@@ -316,7 +316,7 @@ app.post('/api/classify', async (req, res) => {
 
     // Check if OpenAI API key is configured
     const openaiApiKey = process.env.OPENAI_API_KEY;
-    
+
     if (!openaiApiKey) {
       // Return mock response if no API key configured
       const mockResponse = {
@@ -329,8 +329,8 @@ app.post('/api/classify', async (req, res) => {
           isTaxDeductible: amount > 50,
           businessUsePercentage: amount > 100 ? 100 : 50,
           primaryType: type === 'credit' ? 'income' : 'expense',
-          secondaryType: description.toLowerCase().includes('bill') || 
-                       description.toLowerCase().includes('subscription') ? 'bill' : 'one-time expense'
+          secondaryType: description.toLowerCase().includes('bill') ||
+            description.toLowerCase().includes('subscription') ? 'bill' : 'one-time expense'
         },
         timestamp: new Date().toISOString()
       };
@@ -350,14 +350,14 @@ app.post('/api/classify', async (req, res) => {
       try {
         // Note: In a production system, this would be a secure internal API call
         const coreAppUrl = process.env.CORE_APP_URL || 'http://localhost:3001';
-        
+
         // Fetch country preferences
         const countryResponse = await fetch(`${coreAppUrl}/api/country/preferences`, {
           headers: {
             'Authorization': `Bearer ${req.headers.authorization?.replace('Bearer ', '')}`
           }
         });
-        
+
         if (countryResponse.ok) {
           const countryData = await countryResponse.json() as any;
           if (countryData.success && countryData.preferences) {
@@ -373,7 +373,7 @@ app.post('/api/classify', async (req, res) => {
             'Authorization': `Bearer ${req.headers.authorization?.replace('Bearer ', '')}`
           }
         });
-        
+
         if (aiProfileResponse.ok) {
           const aiProfileData = await aiProfileResponse.json() as any;
           if (aiProfileData.profile) {
@@ -485,7 +485,7 @@ app.get('/health', (req, res) => {
 app.post('/api/ai/analyze-transaction-mock', async (req, res) => {
   try {
     const { description, amount, date } = req.body;
-    
+
     // Simple mock analysis for backward compatibility
     const analysis = {
       category: 'Uncategorized [MOCK DATA]',
@@ -521,7 +521,7 @@ app.post('/api/ai/analyze-transaction-mock', async (req, res) => {
 app.post('/api/ai/batch-analyze-mock', async (req, res) => {
   try {
     const { transactions } = req.body;
-    
+
     const results = transactions.map((t: any) => ({
       id: t.id,
       analysis: {
