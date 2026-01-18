@@ -1,4 +1,5 @@
-import '../instrument'; // Sentry initialization - must be first\nimport express from 'express';
+import '../instrument'; // Sentry initialization - must be first
+import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { authenticateToken, serviceAuth } from './middleware/auth';
@@ -182,4 +183,4 @@ if (require.main === module) {
   });
 }
 
-export default app; 
+export default app;

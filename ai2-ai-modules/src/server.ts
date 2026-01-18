@@ -1,4 +1,5 @@
-import '../instrument'; // Sentry initialization - must be first\nimport dotenv from 'dotenv';
+import '../instrument'; // Sentry initialization - must be first
+import dotenv from 'dotenv';
 import path from 'path';
 
 // Load environment variables from multiple possible locations
@@ -47,9 +48,9 @@ import simpleRoutes from './routes/ai-simple';
 // import taxRoutes from './routes/ai-tax';  // File doesn't exist
 
 // NEW: MCP Chat System
-import chatRoutes from './routes/chat-routes';
-import { toolRegistry } from './mcp/server/ToolRegistry';
-import { allTools } from './mcp/tools';
+// import chatRoutes from './routes/chat-routes';
+// import { toolRegistry } from './mcp/server/ToolRegistry';
+// import { allTools } from './mcp/tools';
 import { logger } from './logger';
 
 const app = express();
@@ -103,8 +104,8 @@ const corsOptions = {
 // Register all tools on startup
 // ==========================================
 logger.info('🔧 Registering MCP tools...');
-toolRegistry.registerMany(allTools);
-logger.info(`✅ Registered ${toolRegistry.count()} MCP tools`);
+// toolRegistry.registerMany(allTools);
+// logger.info(`✅ Registered ${toolRegistry.count()} MCP tools`);
 
 // Middleware
 // CF Origin Lock - ensure requests arrive via Cloudflare by validating a secret header
@@ -218,8 +219,8 @@ app.use('/api/simple', simpleRoutes);
 // app.use('/api/ai-tax', taxRoutes);
 
 // 🤖 NEW: MCP CHAT ROUTES - Mount the new AI chat system
-app.use(chatRoutes);
-logger.info('✅ MCP Chat routes mounted');
+// app.use(chatRoutes);
+logger.info('✅ MCP Chat routes mounted (DISABLED due to missing module)');
 
 // 🔥 USER-SPECIFIC ANALYZE ENDPOINT - MUST BE BEFORE OTHER ROUTES
 // This handles requests like /cmd30zpi3000kp9iwwcj0w66b/analyze
@@ -572,4 +573,4 @@ if (require.main === module) {
   });
 }
 
-export default app; 
+export default app;

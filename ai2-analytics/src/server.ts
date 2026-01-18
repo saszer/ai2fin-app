@@ -1,4 +1,5 @@
-import '../instrument'; // Sentry initialization - must be first\nimport express from 'express';
+import '../instrument'; // Sentry initialization - must be first
+import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import exportRoutes from './routes/exports';
@@ -572,4 +573,4 @@ if (require.main === module) {
   server.headersTimeout = 66000; // 66 seconds
 }
 
-export default app; 
+export default app;
