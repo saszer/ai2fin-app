@@ -31,7 +31,7 @@ else
 
 hosts:
   - default:
-      url: https://localhost
+      url: https://127.0.0.1
       port: 55000
       username: $WAZUH_USER
       password: $WAZUH_PASS

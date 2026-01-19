@@ -25,7 +25,7 @@ CURL_OPTS="-k"
 #   - 503: Indexer up but security not initialized (need to run securityadmin)
 echo "Step 1: Waiting for Indexer HTTPS endpoint..."
 while [ $ELAPSED -lt $MAX_WAIT ]; do
-    HTTP_CODE=$(curl -s $CURL_OPTS -o /dev/null -w "%{http_code}" https://localhost:9200 2>/dev/null)
+    HTTP_CODE=$(curl -s $CURL_OPTS -o /dev/null -w "%{http_code}" https://127.0.0.1:9200 2>/dev/null)
     # Accept 200, 401, or 503 - all mean Indexer is up and responding
     if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "503" ]; then
         echo "✓ Indexer HTTPS endpoint is responding (HTTP $HTTP_CODE)"
@@ -46,7 +46,7 @@ echo "Step 2: Initializing security configuration with securityadmin..."
 export JAVA_HOME=/usr/share/wazuh-indexer/jdk
 
 # Check if security is already initialized
-HTTP_CODE=$(curl -s $CURL_OPTS -o /dev/null -w "%{http_code}" -u admin:"$ADMIN_PASS" https://localhost:9200/_cluster/health 2>/dev/null)
+HTTP_CODE=$(curl -s $CURL_OPTS -o /dev/null -w "%{http_code}" -u admin:"$ADMIN_PASS" https://127.0.0.1:9200/_cluster/health 2>/dev/null)
 if [ "$HTTP_CODE" = "200" ]; then
     echo "✓ Security already initialized - skipping securityadmin"
 else
@@ -85,7 +85,7 @@ ELAPSED=0
 MAX_VERIFY_WAIT=60
 while [ $ELAPSED -lt $MAX_VERIFY_WAIT ]; do
     # Just check that Indexer is responding (any response is fine)
-    HTTP_CODE=$(curl -s $CURL_OPTS -o /dev/null -w "%{http_code}" https://localhost:9200 2>/dev/null)
+    HTTP_CODE=$(curl -s $CURL_OPTS -o /dev/null -w "%{http_code}" https://127.0.0.1:9200 2>/dev/null)
     if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "200" ]; then
         echo "✓ Security active - Indexer requiring authentication (HTTP $HTTP_CODE)"
         break

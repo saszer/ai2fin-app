@@ -7,7 +7,7 @@
 output.elasticsearch:
   # Use localhost for Fly.io single-container deployment
   # For local docker-compose, override this with environment variable or separate config
-  hosts: ["https://localhost:9200"]
+  hosts: ["https://127.0.0.1:9200"]
   protocol: https
   username: "admin"
   password: "${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-admin}"

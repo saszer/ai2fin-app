@@ -46,7 +46,7 @@ import requests, sys
 import urllib3
 urllib3.disable_warnings()
 try:
-    r = requests.post('https://localhost:55000/security/user/authenticate?raw=true', 
+    r = requests.post('https://127.0.0.1:55000/security/user/authenticate?raw=true', 
                       auth=('$u', '$p'), verify=False, timeout=10)
     print(r.text)
 except Exception as e:
@@ -80,7 +80,7 @@ import urllib3
 urllib3.disable_warnings()
 headers = {'Authorization': 'Bearer $TOKEN'}
 try:
-    r = requests.get('https://localhost:55000/security/users', headers=headers, verify=False)
+    r = requests.get('https://127.0.0.1:55000/security/users', headers=headers, verify=False)
     if '$TARGET_USER' in r.text:
         print('EXISTS')
     else:
@@ -100,11 +100,11 @@ urllib3.disable_warnings()
 headers = {'Authorization': 'Bearer $TOKEN', 'Content-Type': 'application/json'}
 try:
     # Get ID
-    r = requests.get('https://localhost:55000/security/users?search_text=$TARGET_USER', headers=headers, verify=False)
+    r = requests.get('https://127.0.0.1:55000/security/users?search_text=$TARGET_USER', headers=headers, verify=False)
     uid = r.json()['data']['affected_items'][0]['id']
     
     # Update
-    r = requests.put(f'https://localhost:55000/security/users/{uid}', headers=headers, verify=False, json={'password': '$TARGET_PASS'})
+    r = requests.put(f'https://127.0.0.1:55000/security/users/{uid}', headers=headers, verify=False, json={'password': '$TARGET_PASS'})
     print(r.status_code)
 except Exception as e:
     print(e)
@@ -118,7 +118,7 @@ import urllib3
 urllib3.disable_warnings()
 headers = {'Authorization': 'Bearer $TOKEN', 'Content-Type': 'application/json'}
 try:
-    r = requests.post('https://localhost:55000/security/users', headers=headers, verify=False, json={'username': '$TARGET_USER', 'password': '$TARGET_PASS'})
+    r = requests.post('https://127.0.0.1:55000/security/users', headers=headers, verify=False, json={'username': '$TARGET_USER', 'password': '$TARGET_PASS'})
     print(f'Create status: {r.status_code}')
     
     # Needs admin role (id 1)
