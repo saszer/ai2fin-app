@@ -78,8 +78,12 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 BODY=$(echo "$RESPONSE" | sed '$d')
 
-if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
-    echo "  ✅ Index pattern created successfully"
+if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "409" ]; then
+    if [ "$HTTP_CODE" = "409" ]; then
+        echo "  ✅ Index pattern already exists"
+    else
+        echo "  ✅ Index pattern created successfully"
+    fi
     
     # Try to set as default (optional, may fail if already set)
     curl -s -X POST \

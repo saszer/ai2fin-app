@@ -43,11 +43,9 @@ get_token() {
     # Python script to handle auth securely/reliably without curl weirdness
     local token_response=$(python3 -c "
 import requests, sys
-import urllib3
-urllib3.disable_warnings()
 try:
-    r = requests.post('https://127.0.0.1:55000/security/user/authenticate?raw=true', 
-                      auth=('$u', '$p'), verify=False, timeout=10)
+    r = requests.post('http://127.0.0.1:55000/security/user/authenticate?raw=true', 
+                      auth=('$u', '$p'), timeout=10)
     print(r.text)
 except Exception as e:
     print(f'ERROR: {e}')
@@ -76,11 +74,9 @@ log "✅ Got authentication token!"
 # Check if target user exists
 check_user_script="
 import requests, sys
-import urllib3
-urllib3.disable_warnings()
 headers = {'Authorization': 'Bearer $TOKEN'}
 try:
-    r = requests.get('https://127.0.0.1:55000/security/users', headers=headers, verify=False)
+    r = requests.get('http://127.0.0.1:55000/security/users', headers=headers)
     if '$TARGET_USER' in r.text:
         print('EXISTS')
     else:
@@ -95,16 +91,14 @@ if [ "$USER_STATUS" == "EXISTS" ]; then
     # Update password script
     update_script="
 import requests, sys
-import urllib3
-urllib3.disable_warnings()
 headers = {'Authorization': 'Bearer $TOKEN', 'Content-Type': 'application/json'}
 try:
     # Get ID
-    r = requests.get('https://127.0.0.1:55000/security/users?search_text=$TARGET_USER', headers=headers, verify=False)
+    r = requests.get('http://127.0.0.1:55000/security/users?search_text=$TARGET_USER', headers=headers)
     uid = r.json()['data']['affected_items'][0]['id']
     
     # Update
-    r = requests.put(f'https://127.0.0.1:55000/security/users/{uid}', headers=headers, verify=False, json={'password': '$TARGET_PASS'})
+    r = requests.put(f'http://127.0.0.1:55000/security/users/{uid}', headers=headers, json={'password': '$TARGET_PASS'})
     print(r.status_code)
 except Exception as e:
     print(e)
@@ -114,11 +108,9 @@ else
     log "Creating user $TARGET_USER..."
     create_script="
 import requests, sys
-import urllib3
-urllib3.disable_warnings()
 headers = {'Authorization': 'Bearer $TOKEN', 'Content-Type': 'application/json'}
 try:
-    r = requests.post('https://127.0.0.1:55000/security/users', headers=headers, verify=False, json={'username': '$TARGET_USER', 'password': '$TARGET_PASS'})
+    r = requests.post('http://127.0.0.1:55000/security/users', headers=headers, json={'username': '$TARGET_USER', 'password': '$TARGET_PASS'})
     print(f'Create status: {r.status_code}')
     
     # Needs admin role (id 1)

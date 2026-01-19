@@ -10,7 +10,7 @@
 
 hosts:
   - default:
-      url: https://127.0.0.1
+      url: http://127.0.0.1
       port: 55000
       username: __WAZUH_API_USER__
       password: __WAZUH_API_PASSWORD__
