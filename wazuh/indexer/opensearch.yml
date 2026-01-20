@@ -4,11 +4,11 @@
 
 cluster.name: wazuh-cluster
 node.name: wazuh-indexer
-# CRITICAL: Using non-volume location due to Fly.io volume mount restrictions
-# Fly.io volumes don't support user switching, so wazuh-indexer can't access /var/ossec/data
-# Using /var/lib/wazuh-indexer/data (not on volume) - data will NOT persist across restarts
-# For production persistence, consider using external backup/restore or different storage solution
-path.data: /var/lib/wazuh-indexer/data
+# CRITICAL: Using volume location for persistence
+# Indexer runs as root (via supervisord) to bypass Fly.io volume mount restrictions
+# This allows access to /var/ossec/data (volume mount) while maintaining security via OpenSearch plugins
+# Data WILL persist across container restarts
+path.data: /var/ossec/data/wazuh-indexer-data
 path.logs: /var/log/wazuh-indexer
 
 network.host: 0.0.0.0
@@ -80,4 +80,13 @@ plugins.security.check_snapshot_restore_write_privileges: true
 # Performance settings for Fly.io (4GB RAM)
 bootstrap.memory_lock: false
 cluster.routing.allocation.disk.threshold_enabled: true
+
+# Disk space management - prevent read-only blocks
+# Set watermarks to prevent disk from filling up
+cluster.routing.allocation.disk.watermark.low: 85%
+cluster.routing.allocation.disk.watermark.high: 90%
+cluster.routing.allocation.disk.watermark.flood_stage: 95%
+
+# Index lifecycle management - auto-create indices
+action.auto_create_index: true
 

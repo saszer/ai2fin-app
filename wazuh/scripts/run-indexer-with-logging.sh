@@ -130,19 +130,23 @@ echo "Starting Indexer as wazuh-indexer user..."
 trap 'echo "ERROR: Indexer exited with code $?"' EXIT
 
 # CRITICAL: OpenSearch REFUSES to run as root (security feature)
-# We MUST run as wazuh-indexer user, but Fly.io volumes don't support user switching
-# Solution: Use non-volume location for data directory (/var/lib/wazuh-indexer/data)
-# This loses persistence but allows indexer to start
+# We MUST run as wazuh-indexer user
+# Solution: Ensure volume path is accessible with proper permissions
+# Volume path: /var/ossec/data/wazuh-indexer-data (persistent storage)
 
 # Set temp directory environment variable (overrides JVM options if needed)
 export TMPDIR="/tmp/wazuh-indexer-tmp"
 export OPENSEARCH_JAVA_OPTS="-Djava.io.tmpdir=/tmp/wazuh-indexer-tmp"
 
 # Ensure correct permissions on persistent data path
+# CRITICAL: Must be accessible to wazuh-indexer user
 if [ -d "/var/ossec/data/wazuh-indexer-data" ]; then
     echo "Ensuring permissions on persistent data path..."
     chown -R wazuh-indexer:wazuh-indexer /var/ossec/data/wazuh-indexer-data 2>/dev/null || true
-    chmod -R 777 /var/ossec/data/wazuh-indexer-data 2>/dev/null || true
+    chmod -R 775 /var/ossec/data/wazuh-indexer-data 2>/dev/null || true
+    # Also ensure parent directory is accessible
+    chmod 755 /var/ossec/data 2>/dev/null || true
+    chmod o+x /var/ossec/data 2>/dev/null || true
 fi
 
 # Run as wazuh-indexer user (OpenSearch requires this - won't run as root)
