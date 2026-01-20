@@ -8,7 +8,7 @@ set +e # Don't exit on error
 echo "🔧 Verifying Indexer startup prerequisites..."
 
 # 1. Verify data directory exists and has correct permissions
-INDEXER_DATA="/var/ossec/data/wazuh-indexer-data"
+INDEXER_DATA="/var/lib/wazuh-indexer/data"
 if [ ! -d "$INDEXER_DATA" ]; then
     echo "  Creating Indexer data directory..."
     mkdir -p "$INDEXER_DATA"
@@ -43,8 +43,8 @@ if [ ! -f "/usr/share/wazuh-indexer/bin/opensearch" ]; then
 fi
 
 # 6. Verify parent directory permissions
-chmod 755 /var/ossec/data 2>/dev/null || true
-chmod o+x /var/ossec/data 2>/dev/null || true
+chmod 755 /var/lib/wazuh-indexer 2>/dev/null || true
+chmod o+x /var/lib/wazuh-indexer 2>/dev/null || true
 
 # 7. Final permission fix on data directory
 chown -R wazuh-indexer:wazuh-indexer "$INDEXER_DATA" 2>/dev/null || true

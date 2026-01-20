@@ -58,25 +58,28 @@ else
 fi
 
 # ============================================================================
-# INDEXER DATA PERSISTENCE (CRITICAL!)
-# The Indexer stores all security events, alerts, and logs in its data dir.
-# Without persistence, ALL DATA IS LOST on container restart!
-# Solution: Create data directories on the persistent volume and symlink
+# INDEXER DATA DIRECTORY SETUP
+# CRITICAL: Using non-volume location due to Fly.io volume mount restrictions
+# Fly.io volumes don't support user switching (sudo -u fails)
+# OpenSearch refuses to run as root (security feature)
+# Solution: Use /var/lib/wazuh-indexer/data (not on volume) so wazuh-indexer user can access it
+# NOTE: Data will NOT persist across container restarts (Fly.io limitation)
+# For persistence, use snapshot/restore API or external backup
 # ============================================================================
-echo "Setting up Indexer data persistence..."
+echo "Setting up Indexer data directory (non-volume due to Fly.io restrictions)..."
 
-# Create persistent Indexer data directory on volume
-INDEXER_PERSISTENT_DATA="/var/ossec/data/wazuh-indexer-data"
-mkdir -p "$INDEXER_PERSISTENT_DATA"
+# Create Indexer data directory (NOT on volume - Fly.io volumes don't support user switching)
+INDEXER_DATA="/var/lib/wazuh-indexer/data"
+mkdir -p "$INDEXER_DATA"
 
 # CRITICAL: Clear incompatible security data when enabling security
 # Security index from non-secured Indexer is incompatible with secured Indexer
 # Also clear if security index is corrupted or incomplete
-if [ -d "$INDEXER_PERSISTENT_DATA/nodes" ]; then
+if [ -d "$INDEXER_DATA/nodes" ]; then
     # Check if security index exists (from previous non-secured run or corrupted)
-    if [ -d "$INDEXER_PERSISTENT_DATA/nodes/0/indices" ]; then
+    if [ -d "$INDEXER_DATA/nodes/0/indices" ]; then
         # Find all security-related indices
-        SECURITY_INDICES=$(find "$INDEXER_PERSISTENT_DATA/nodes/0/indices" -name ".opensearch_security*" -o -name ".security*" 2>/dev/null)
+        SECURITY_INDICES=$(find "$INDEXER_DATA/nodes/0/indices" -name ".opensearch_security*" -o -name ".security*" 2>/dev/null)
         if [ -n "$SECURITY_INDICES" ]; then
             echo "⚠️ Found existing security indices from previous run"
             echo "⚠️ Removing incompatible security indices (will be recreated with security enabled)..."
@@ -89,9 +92,9 @@ if [ -d "$INDEXER_PERSISTENT_DATA/nodes" ]; then
         fi
         
         # Also check for security configuration in cluster state
-        if [ -d "$INDEXER_PERSISTENT_DATA/nodes/0/_state" ]; then
+        if [ -d "$INDEXER_DATA/nodes/0/_state" ]; then
             echo "⚠️ Checking for security-related cluster state..."
-            find "$INDEXER_PERSISTENT_DATA/nodes/0/_state" -name "*security*" -o -name "*opensearch_security*" 2>/dev/null | while read -r state_file; do
+            find "$INDEXER_DATA/nodes/0/_state" -name "*security*" -o -name "*opensearch_security*" 2>/dev/null | while read -r state_file; do
                 if [ -n "$state_file" ]; then
                     echo "  Removing security state: $state_file"
                     rm -f "$state_file" 2>/dev/null || true
@@ -101,41 +104,24 @@ if [ -d "$INDEXER_PERSISTENT_DATA/nodes" ]; then
     fi
 fi
 
-chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
-chmod -R 755 "$INDEXER_PERSISTENT_DATA"
+chown -R wazuh-indexer:wazuh-indexer "$INDEXER_DATA" 2>/dev/null || true
+chmod -R 755 "$INDEXER_DATA"
 
 # CRITICAL: Ensure the target directory exists and is a directory (not a file)
-if [ ! -d "$INDEXER_PERSISTENT_DATA" ]; then
-    echo "ERROR: Persistent data directory does not exist: $INDEXER_PERSISTENT_DATA"
+if [ ! -d "$INDEXER_DATA" ]; then
+    echo "ERROR: Indexer data directory does not exist: $INDEXER_DATA"
     exit 1
 fi
 
-# CRITICAL: OpenSearch bootstrap code cannot handle symlinks
-# It requires path.data to be an actual directory, not a symlink
-# Solution: Use persistent volume path directly in opensearch.yml
-# No symlink needed - OpenSearch will use /var/ossec/data/wazuh-indexer-data directly
-
-# Migrate any existing data from old symlink location if it exists
-if [ -L "/var/lib/wazuh-indexer/data" ] || [ -d "/var/lib/wazuh-indexer/data" ]; then
-    echo "Migrating existing Indexer data to persistent storage..."
-    OLD_DATA="/var/lib/wazuh-indexer/data"
-    if [ -d "$OLD_DATA" ] && [ "$(ls -A "$OLD_DATA" 2>/dev/null)" ]; then
-        echo "Copying data from $OLD_DATA to $INDEXER_PERSISTENT_DATA..."
-        cp -rp "$OLD_DATA"/* "$INDEXER_PERSISTENT_DATA/" 2>/dev/null || true
-    fi
-    # Remove old symlink or directory (OpenSearch will use persistent path directly)
-    rm -rf "$OLD_DATA" 2>/dev/null || true
-fi
-
-# Ensure persistent data directory exists and has correct permissions
-# This is the directory OpenSearch will use directly (no symlink)
-if [ -e "$INDEXER_PERSISTENT_DATA" ] && [ ! -d "$INDEXER_PERSISTENT_DATA" ]; then
-    echo "WARNING: Persistent data path exists but is not a directory, removing..."
-    rm -rf "$INDEXER_PERSISTENT_DATA"
+# Ensure data directory exists and has correct permissions
+# This is the directory OpenSearch will use directly (not on volume)
+if [ -e "$INDEXER_DATA" ] && [ ! -d "$INDEXER_DATA" ]; then
+    echo "WARNING: Indexer data path exists but is not a directory, removing..."
+    rm -rf "$INDEXER_DATA"
 fi
 
 # Create the directory if it doesn't exist
-mkdir -p "$INDEXER_PERSISTENT_DATA"
+mkdir -p "$INDEXER_DATA"
 
 # CRITICAL: Use /tmp for temp directory - Fly.io volumes don't support user switching
 # Volume mounts have restrictions that prevent sudo -u from working
@@ -150,42 +136,42 @@ echo "✓ Temp directory created: $TEMP_DIR"
 
 # CRITICAL: Set permissions so wazuh-indexer user can access it
 # OpenSearch needs read/write/execute access to the data directory
-chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
-chmod -R 755 "$INDEXER_PERSISTENT_DATA"
+chown -R wazuh-indexer:wazuh-indexer "$INDEXER_DATA" 2>/dev/null || true
+chmod -R 755 "$INDEXER_DATA"
 # Ensure Indexer can create indices (security plugin needs this)
-chmod 775 "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
+chmod 775 "$INDEXER_DATA" 2>/dev/null || true
 
 # CRITICAL: Also ensure parent directory is accessible
 # OpenSearch bootstrap checks parent directory permissions
-chmod 755 /var/ossec/data 2>/dev/null || true
-chmod o+x /var/ossec/data 2>/dev/null || true
+chmod 755 /var/lib/wazuh-indexer 2>/dev/null || true
+chmod o+x /var/lib/wazuh-indexer 2>/dev/null || true
 
 # Verify the directory exists and is accessible
-if [ ! -d "$INDEXER_PERSISTENT_DATA" ]; then
-    echo "ERROR: Failed to create persistent data directory: $INDEXER_PERSISTENT_DATA"
+if [ ! -d "$INDEXER_DATA" ]; then
+    echo "ERROR: Failed to create Indexer data directory: $INDEXER_DATA"
     exit 1
 fi
 
 # Verify wazuh-indexer user can access the directory
-if ! sudo -u wazuh-indexer test -r "$INDEXER_PERSISTENT_DATA" 2>/dev/null; then
+if ! sudo -u wazuh-indexer test -r "$INDEXER_DATA" 2>/dev/null; then
     echo "WARNING: wazuh-indexer user cannot read data directory, fixing permissions..."
-    chmod -R 775 "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
-    chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
+    chmod -R 775 "$INDEXER_DATA" 2>/dev/null || true
+    chown -R wazuh-indexer:wazuh-indexer "$INDEXER_DATA" 2>/dev/null || true
 fi
 
-echo "✓ Indexer will use persistent data directory directly: $INDEXER_PERSISTENT_DATA"
+echo "✓ Indexer will use data directory: $INDEXER_DATA (NOT on volume - Fly.io limitation)"
 
 # Set permissions on data directory (important for Indexer access)
 # CRITICAL: Security plugin needs write access to create security index
-chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
-chmod -R 755 "$INDEXER_PERSISTENT_DATA"
+chown -R wazuh-indexer:wazuh-indexer "$INDEXER_DATA" 2>/dev/null || true
+chmod -R 755 "$INDEXER_DATA"
 # Ensure Indexer can create indices (security plugin needs this)
-chmod 775 "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
+chmod 775 "$INDEXER_DATA" 2>/dev/null || true
 
 # CRITICAL: Ensure security plugin can initialize
 # Create a marker file to indicate we've cleared old security data
-touch "$INDEXER_PERSISTENT_DATA/.security_cleared" 2>/dev/null || true
-chown wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA/.security_cleared" 2>/dev/null || true
+touch "$INDEXER_DATA/.security_cleared" 2>/dev/null || true
+chown wazuh-indexer:wazuh-indexer "$INDEXER_DATA/.security_cleared" 2>/dev/null || true
 
 # Create logs directory (logs don't need persistence)
 mkdir -p /var/lib/wazuh-indexer/logs
@@ -198,14 +184,14 @@ chmod -R 755 /var/log/wazuh-indexer
 # ============================================================================
 # INDEXER DATA PERSISTENCE ENABLED
 # ============================================================================
-echo "Ensuring persistent data directory permissions..."
+echo "Ensuring Indexer data directory permissions..."
 
-# CRITICAL: Fix permissions recursively on the persistent volume
-# Fly.io volumes might have weird ownership, so we are aggressive here
-chown -R wazuh-indexer:wazuh-indexer "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
-chmod -R 775 "$INDEXER_PERSISTENT_DATA" 2>/dev/null || true
+# CRITICAL: Fix permissions recursively on the data directory
+chown -R wazuh-indexer:wazuh-indexer "$INDEXER_DATA" 2>/dev/null || true
+chmod -R 775 "$INDEXER_DATA" 2>/dev/null || true
 
-echo "✓ Indexer configured to use persistent data at: $INDEXER_PERSISTENT_DATA"
+echo "✓ Indexer configured to use data directory: $INDEXER_DATA"
+echo "⚠️  NOTE: Data will NOT persist across container restarts (Fly.io volume limitation)"
 
 # ============================================================================
 # DASHBOARD DATA PERSISTENCE
