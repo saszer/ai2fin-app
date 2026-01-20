@@ -31,11 +31,14 @@ else
 
 hosts:
   - default:
-      url: http://127.0.0.1
+      url: https://127.0.0.1
       port: 55000
       username: $WAZUH_USER
       password: $WAZUH_PASS
       run_as: false
+      # Skip SSL verification for self-signed certs
+      ssl:
+        verify: false
 
 customization.logo.app: "custom/images/customization.logo.app.png?v=1767320479282"
 EOF

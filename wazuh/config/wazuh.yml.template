@@ -10,10 +10,13 @@
 
 hosts:
   - default:
-      url: http://127.0.0.1
+      url: https://127.0.0.1
       port: 55000
       username: __WAZUH_API_USER__
       password: __WAZUH_API_PASSWORD__
       run_as: false
+      # Skip SSL verification for self-signed certs
+      ssl:
+        verify: false
 
 customization.logo.app: "custom/images/customization.logo.app.png?v=1767320479282"
