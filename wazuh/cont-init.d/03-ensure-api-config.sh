@@ -72,7 +72,10 @@ else
 host: '0.0.0.0'
 port: 55000
 https:
-  enabled: no
+  enabled: yes
+  key: sslmanager.key
+  cert: sslmanager.cert
+  use_ca: no
 cors:
   enabled: yes
   source_route: 'https://*.ai2fin.com,https://ai2fin.com,https://*.fly.dev'
