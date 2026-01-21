@@ -41,11 +41,12 @@ get_token() {
     log "Attempting auth with $u..."
     
     # Python script to handle auth securely/reliably without curl weirdness
+    # API uses HTTPS with self-signed certs, so we disable verification
     local token_response=$(python3 -c "
 import requests, sys
 try:
-    r = requests.post('http://127.0.0.1:55000/security/user/authenticate?raw=true', 
-                      auth=('$u', '$p'), timeout=10)
+    r = requests.post('https://127.0.0.1:55000/security/user/authenticate?raw=true', 
+                      auth=('$u', '$p'), timeout=10, verify=False)
     print(r.text)
 except Exception as e:
     print(f'ERROR: {e}')
@@ -58,8 +59,12 @@ except Exception as e:
     fi
 }
 
-# Try defaults
-TOKEN=$(get_token "wazuh" "wazuh")
+# Try target user first (from env vars)
+TOKEN=$(get_token "$TARGET_USER" "$TARGET_PASS")
+if [ -z "$TOKEN" ]; then
+    # Try defaults as fallback
+    TOKEN=$(get_token "wazuh" "wazuh")
+fi
 if [ -z "$TOKEN" ]; then
     TOKEN=$(get_token "wazuh-wui" "wazuh-wui")
 fi
@@ -74,15 +79,16 @@ log "✅ Got authentication token!"
 # Check if target user exists
 check_user_script="
 import requests, sys
+requests.packages.urllib3.disable_warnings()
 headers = {'Authorization': 'Bearer $TOKEN'}
 try:
-    r = requests.get('http://127.0.0.1:55000/security/users', headers=headers)
+    r = requests.get('https://127.0.0.1:55000/security/users', headers=headers, verify=False)
     if '$TARGET_USER' in r.text:
         print('EXISTS')
     else:
         print('MISSING')
-except:
-    print('ERROR')
+except Exception as e:
+    print(f'ERROR: {e}')
 "
 USER_STATUS=$(python3 -c "$check_user_script")
 
@@ -91,14 +97,15 @@ if [ "$USER_STATUS" == "EXISTS" ]; then
     # Update password script
     update_script="
 import requests, sys
+requests.packages.urllib3.disable_warnings()
 headers = {'Authorization': 'Bearer $TOKEN', 'Content-Type': 'application/json'}
 try:
     # Get ID
-    r = requests.get('http://127.0.0.1:55000/security/users?search_text=$TARGET_USER', headers=headers)
+    r = requests.get('https://127.0.0.1:55000/security/users?search_text=$TARGET_USER', headers=headers, verify=False)
     uid = r.json()['data']['affected_items'][0]['id']
     
     # Update
-    r = requests.put(f'http://127.0.0.1:55000/security/users/{uid}', headers=headers, json={'password': '$TARGET_PASS'})
+    r = requests.put(f'https://127.0.0.1:55000/security/users/{uid}', headers=headers, json={'password': '$TARGET_PASS'}, verify=False)
     print(r.status_code)
 except Exception as e:
     print(e)
@@ -108,9 +115,10 @@ else
     log "Creating user $TARGET_USER..."
     create_script="
 import requests, sys
+requests.packages.urllib3.disable_warnings()
 headers = {'Authorization': 'Bearer $TOKEN', 'Content-Type': 'application/json'}
 try:
-    r = requests.post('http://127.0.0.1:55000/security/users', headers=headers, json={'username': '$TARGET_USER', 'password': '$TARGET_PASS'})
+    r = requests.post('https://127.0.0.1:55000/security/users', headers=headers, json={'username': '$TARGET_USER', 'password': '$TARGET_PASS'}, verify=False)
     print(f'Create status: {r.status_code}')
     
     # Needs admin role (id 1)

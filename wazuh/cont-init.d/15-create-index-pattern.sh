@@ -78,11 +78,25 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 BODY=$(echo "$RESPONSE" | sed '$d')
 
-if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "409" ]; then
-    if [ "$HTTP_CODE" = "409" ]; then
-        echo "  ✅ Index pattern already exists"
-    else
-        echo "  ✅ Index pattern created successfully"
+if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+    echo "  ✅ Index pattern created successfully"
+elif [ "$HTTP_CODE" = "409" ]; then
+    echo "  ✅ Index pattern already exists (version conflict is OK)"
+    # Try to update it instead (handle version conflict)
+    PATTERN_ID=$(echo "$BODY" | grep -o '"id":"[^"]*"' | cut -d'"' -f4 || echo "$INDEX_PATTERN")
+    if [ -n "$PATTERN_ID" ]; then
+        echo "  Updating existing index pattern..."
+        curl -s -X PUT \
+            -u "admin:$OPENSEARCH_PASSWORD" \
+            "$DASHBOARD_URL/api/saved_objects/index-pattern/$PATTERN_ID" \
+            -H "Content-Type: application/json" \
+            -H "osd-xsrf: true" \
+            -d "{
+                \"attributes\": {
+                    \"title\": \"$INDEX_PATTERN\",
+                    \"timeFieldName\": \"timestamp\"
+                }
+            }" >/dev/null 2>&1 || true
     fi
     
     # Try to set as default (optional, may fail if already set)
