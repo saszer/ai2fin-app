@@ -94,11 +94,11 @@ RUN if [ -f /etc/wazuh-dashboard/opensearch_dashboards.yml ]; then \
     sed -i 's/^server\.host:.*/server.host: "::"/' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || true; \
     sed -i 's/^server\.port:.*/server.port: 5601/' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || true; \
     if ! grep -q "^server\.host:" /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null; then \
-        sed -i '/^server\.port:/a server.host: "::"' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || \
-        echo 'server.host: "::"' >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \
+    sed -i '/^server\.port:/a server.host: "::"' /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null || \
+    echo 'server.host: "::"' >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \
     fi; \
     if ! grep -q "^server\.port:" /etc/wazuh-dashboard/opensearch_dashboards.yml 2>/dev/null; then \
-        echo "server.port: 5601" >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \
+    echo "server.port: 5601" >> /etc/wazuh-dashboard/opensearch_dashboards.yml; \
     fi; \
     fi
 
@@ -153,24 +153,34 @@ RUN useradd -r -s /bin/false -u 1001 supervisor-user || true
 
 # Create startup script that runs init scripts then supervisord
 RUN printf '#!/bin/bash\n\
-set +e\n\
-echo "Running initialization scripts..."\n\
-for script in /etc/cont-init.d/*.sh; do\n\
-  if [ -f "$script" ]; then\n\
+    set +e\n\
+    echo "Running initialization scripts..."\n\
+    for script in /etc/cont-init.d/*.sh; do\n\
+    if [ -f "$script" ]; then\n\
+    # Background scripts that wait for services to avoid blocking supervisord\n\
+    case "$(basename "$script")" in\n\
+    13-*|14-fix-*|15-*|17-*|19-*)\n\
+    echo "Backgrounding $script"\n\
+    bash "$script" > "/var/log/$(basename "$script").log" 2>&1 &\n\
+    ;;\n\
+    *)\n\
     echo "Running $script"\n\
     bash "$script" || true\n\
-  fi\n\
-done\n\
-echo "Starting supervisord..."\n\
-exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf\n\
-' > /start.sh && chmod +x /start.sh
+    ;;\n\
+    esac\n\
+    fi\n\
+    done\n\
+    echo "Starting supervisord..."\n\
+    exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf\n\
+    ' > /start.sh && chmod +x /start.sh
+
 
 # Expose ports (5601 Dashboard UI direct; 55000 API; 9200 Indexer)
 EXPOSE 55000 9200 5601
 
 # Health check - Check Dashboard API status directly
 HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
-  CMD curl -f http://localhost:5601/api/status || exit 1
+    CMD curl -f http://localhost:5601/api/status || exit 1
 
 # Start script (runs init scripts then supervisord)
 CMD ["/start.sh"]
