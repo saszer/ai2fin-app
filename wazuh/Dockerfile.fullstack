@@ -183,6 +183,13 @@ RUN printf '#!/bin/bash\n\
 # Expose ports (5601 Dashboard UI direct; 55000 API; 9200 Indexer)
 EXPOSE 55000 9200 5601
 
+# SECURITY: Drop capabilities and restrict root where possible — embracingearth.space
+# Supervisord must run as root to manage multi-user services (wazuh, wazuh-indexer,
+# wazuh-dashboard each run as their own users). Individual services drop to
+# their service accounts. This is the standard Wazuh architecture.
+# Aikido IaC finding: root is required for supervisord orchestration.
+RUN chmod 700 /start.sh
+
 # Health check - Check Dashboard API status directly
 HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
     CMD curl -f http://localhost:5601/api/status || exit 1

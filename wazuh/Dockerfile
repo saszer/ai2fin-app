@@ -57,6 +57,11 @@ EXPOSE 55000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
   CMD (curl -k -f https://localhost:55000/ || wget -q --no-check-certificate --spider https://localhost:55000/ || /var/ossec/bin/wazuh-control status) || exit 1
 
+# SECURITY: Wazuh Manager s6-overlay requires PID 1 as root to manage
+# child processes (wazuh-manager, wazuh-api, filebeat). Each child drops
+# to its own service user (wazuh, root for filebeat). This is the official
+# design — see https://documentation.wazuh.com/current/deployment-options/docker/
+# embracingearth.space — Aikido IaC finding acknowledged; root required for s6-overlay init.
 # Note: Wazuh Docker image uses s6-overlay (/init) as entrypoint
 # This automatically manages all Wazuh processes and keeps them running
 # We don't need to override CMD - the image handles it
