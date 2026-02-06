@@ -1,0 +1,19 @@
+{
+  "name": "LEGAL_FRAMEWORKS",
+  "description": "Design spec for TermsOfService",
+  "components": [],
+  "layout": {
+    "type": "Grid Layout",
+    "usesCards": true,
+    "usesBox": true,
+    "usesTypography": true
+  },
+  "recommendations": [
+    "Create a Frame with dimensions matching your viewport",
+    "Use Grid system for layout",
+    "Add Card components for content sections",
+    "Match Material-UI spacing (8px grid)",
+    "Use theme colors from your app"
+  ],
+  "filePath": "ai2-core-app\\client\\src\\pages\\TermsOfService.tsx"
+}

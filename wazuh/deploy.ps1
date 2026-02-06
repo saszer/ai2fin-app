@@ -58,6 +58,11 @@ Write-Host "🚀 Starting deployment..." -ForegroundColor Yellow
 Write-Host "⚠️  Using --detach to prevent deployment timeout" -ForegroundColor Yellow
 Write-Host "   (Returns immediately - health checks still run and pass once Dashboard is ready)" -ForegroundColor Yellow
 Write-Host ""
+Write-Host "🔒 CLOUDFLARE TUNNEL CHECK:" -ForegroundColor Cyan
+Write-Host "   Ensure you have set the TUNNEL_TOKEN secret:" -ForegroundColor White
+Write-Host "   fly secrets set TUNNEL_TOKEN=..." -ForegroundColor White
+Write-Host ""
+
 
 & $flyctl deploy -a ai2-wazuh --config fly.toml --detach
 

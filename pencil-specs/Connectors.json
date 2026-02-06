@@ -1,0 +1,19 @@
+{
+  "name": "glassCard",
+  "description": "Design spec for Connectors",
+  "components": [],
+  "layout": {
+    "type": "Grid Layout",
+    "usesCards": false,
+    "usesBox": true,
+    "usesTypography": true
+  },
+  "recommendations": [
+    "Create a Frame with dimensions matching your viewport",
+    "Use Grid system for layout",
+    "Use Box/Paper for sections",
+    "Match Material-UI spacing (8px grid)",
+    "Use theme colors from your app"
+  ],
+  "filePath": "ai2-core-app\\client\\src\\pages\\Connectors.tsx"
+}

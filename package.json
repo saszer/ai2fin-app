@@ -72,6 +72,9 @@
     "ai2-notifications",
     "ai2-subscription-service"
   ],
+  "overrides": {
+    "multer": "2.0.2"
+  },
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"

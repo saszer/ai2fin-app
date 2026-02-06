@@ -249,6 +249,8 @@ desktop.ini
 # ==================================
 # Add project-specific patterns here 
 ai2-ai-modules/
+ai2-core-app/
+ai2-subscription-service/
 # TestSprite - Disabled
 testsprite_tests/
 code_summary.json

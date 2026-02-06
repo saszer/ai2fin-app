@@ -17,6 +17,8 @@ kill_timeout = "30s"
   NODE_ENV = "production"
   # Wazuh API credentials - MUST be set via fly secrets!
   # WAZUH_API_USER and WAZUH_API_PASSWORD are set via: fly secrets set
+  # Cloudflare Tunnel Token - MUST be set via fly secrets!
+  # TUNNEL_TOKEN are set via: fly secrets set TUNNEL_TOKEN=...
 
 [experimental]
   auto_rollback = true
@@ -25,22 +27,22 @@ kill_timeout = "30s"
 # Dashboard is the main service exposed (port 5601)
 # Manager API (port 55000) accessible via Fly.io internal networking
 # Core app should use: https://ai2-wazuh.internal:55000
-[http_service]
-  internal_port = 5601        # Dashboard port (main access point)
-  force_https = true
-  auto_stop_machines = "stop"
-  auto_start_machines = true
-  min_machines_running = 0
-  processes = ["wazuh"]
-
-  # Health check for Dashboard
-  [[http_service.checks]]
-    interval = "60s"
-    timeout = "10s"
-    grace_period = "180s"     # Give all services time to start (Indexer takes ~2-3 min)
-    method = "get"
-    path = "/api/status"       # Dashboard health endpoint
-    protocol = "http"
+# [http_service]
+#   internal_port = 5601        # Dashboard port (main access point)
+#   force_https = true
+#   auto_stop_machines = "off"
+#   auto_start_machines = true
+#   min_machines_running = 1
+#   processes = ["wazuh"]
+#
+#   # Health check for Dashboard
+#   [[http_service.checks]]
+#     interval = "60s"
+#     timeout = "10s"
+#     grace_period = "180s"     # Give all services time to start (Indexer takes ~2-3 min)
+#     method = "get"
+#     path = "/api/status"       # Dashboard health endpoint
+#     protocol = "http"
 
 # Note: Manager API (port 55000) is accessible via Fly.io internal networking
 # Other apps in same organization can access: https://ai2-wazuh.internal:55000

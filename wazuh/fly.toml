@@ -17,6 +17,8 @@ kill_timeout = "30s"
   NODE_ENV = "production"
   # Wazuh API credentials - MUST be set via fly secrets!
   # WAZUH_API_USER and WAZUH_API_PASSWORD are set via: fly secrets set
+  # Cloudflare Tunnel Token - MUST be set via fly secrets!
+  # TUNNEL_TOKEN are set via: fly secrets set TUNNEL_TOKEN=...
 
 [experimental]
   auto_rollback = true
@@ -25,21 +27,21 @@ kill_timeout = "30s"
 # IMPORTANT: Use Fly's `http_service` so routing is HTTP-based (not `tcp/443`),
 # otherwise Fly-proxy may ignore http_checks and require tcp_checks (which proved flaky here).
 # Manager API (port 55000) accessible via Fly.io internal networking
-[http_service]
-  internal_port = 5601
-  auto_stop_machines = "off"    # REQUIRED: Indexer needs 10+ min to start
-  auto_start_machines = true
-  min_machines_running = 1
-  processes = ["wazuh"]
-  force_https = true
-
-  # Fly health check: Dashboard status endpoint
-  # [[http_service.checks]]
-  #   grace_period = "120s"  # Give plenty of time for Indexer + Dashboard to start
-  #   interval = "15s"
-  #   timeout = "5s"
-  #   method = "GET"
-  #   path = "/api/status"
+# [http_service]
+#   internal_port = 5601
+#   auto_stop_machines = "off"    # REQUIRED: Indexer needs 10+ min to start
+#   auto_start_machines = true
+#   min_machines_running = 1
+#   processes = ["wazuh"]
+#   force_https = true
+#
+#   # Fly health check: Dashboard status endpoint
+#   # [[http_service.checks]]
+#   #   grace_period = "120s"  # Give plenty of time for Indexer + Dashboard to start
+#   #   interval = "15s"
+#   #   timeout = "5s"
+#   #   method = "GET"
+#   #   path = "/api/status"
 
 # Note: Manager API (port 55000) is accessible via Fly.io internal networking
 # Other apps in same organization can access: https://ai2-wazuh.internal:55000

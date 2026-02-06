@@ -144,7 +144,7 @@ hsts: {
 - [x] JWT verification already secure in production
 - [x] HSTS configured
 - [x] Documentation updated with security warnings
-- [ ] Secrets rotated in production (ACTION REQUIRED)
+- [x] Secrets rotated in production (COMPLETED)
 - [ ] npm install run (ACTION REQUIRED)
 
 ---

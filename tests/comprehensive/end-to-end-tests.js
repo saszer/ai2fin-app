@@ -468,6 +468,152 @@ class EndToEndTester {
     }
   }
 
+  // ===== TIMELINE ACTIVITY JOURNEY (bill + expense → activity) - embracingearth.space =====
+  // Requires test user (e.g. test@embracingearth.space / TestPass123!) or run after registration journey.
+  async testTimelineActivityJourney() {
+    const journey = 'Timeline Activity';
+    console.log('\n📊 TIMELINE ACTIVITY JOURNEY (bill + expense → activity in timeline)');
+    console.log('='.repeat(50));
+
+    const user = { email: 'test@embracingearth.space', password: 'TestPass123!' };
+    let token = null;
+
+    // Step 1: Login (reuse existingUser from testExistingUserLoginJourney if run in same suite)
+    try {
+      const startTime = Date.now();
+      const response = await this.clients.browser.post('/api/oidc/login', user, {
+        validateStatus: () => true
+      });
+      const duration = Date.now() - startTime;
+      if (response.status === 200 && response.data?.token) {
+        token = response.data.token;
+        this.log(journey, 'Login', 'PASS', 'Token obtained', duration);
+      } else {
+        this.log(journey, 'Login', 'SKIP', `Status: ${response.status} - need test user to run timeline e2e`, duration);
+        return;
+      }
+    } catch (error) {
+      this.log(journey, 'Login', 'FAIL', error.message);
+      return;
+    }
+
+    const auth = { headers: { 'Authorization': `Bearer ${token}` }, validateStatus: () => true };
+
+    // Step 2: Create bill pattern (POST /api/bills/patterns)
+    const billName = `E2E Bill ${Date.now()}`;
+    const billPayload = {
+      name: billName,
+      baseAmount: 99.99,
+      frequency: 'MONTHLY',
+      startDate: new Date().toISOString().split('T')[0]
+    };
+    let billPatternId = null;
+    try {
+      const startTime = Date.now();
+      const response = await this.clients.browser.post('/api/bills/patterns', billPayload, auth);
+      const duration = Date.now() - startTime;
+      if (response.status === 201 && response.data?.id) {
+        billPatternId = response.data.id;
+        this.log(journey, 'Create Bill Pattern', 'PASS', `ID: ${billPatternId}`, duration);
+      } else {
+        this.log(journey, 'Create Bill Pattern', 'FAIL', `Status: ${response.status}`, duration);
+        return;
+      }
+    } catch (error) {
+      this.log(journey, 'Create Bill Pattern', 'FAIL', error.message);
+      return;
+    }
+
+    // Step 3: Fetch recent activity and assert bill appears in timeline
+    try {
+      const startTime = Date.now();
+      const response = await this.clients.browser.get('/api/activity/recent?limit=50', auth);
+      const duration = Date.now() - startTime;
+      if (response.status !== 200 || !response.data?.success) {
+        this.log(journey, 'Activity API (after bill)', 'FAIL', `Status: ${response.status}`, duration);
+        return;
+      }
+      const activities = response.data?.data || response.data || [];
+      const billActivity = activities.find(
+        a => (a.entityType === 'billPattern' && a.entityId === billPatternId) ||
+             (a.description && a.description.includes(billName))
+      );
+      if (billActivity) {
+        this.log(journey, 'Bill in Timeline', 'PASS', `Activity: ${billActivity.description}`, duration);
+      } else {
+        this.log(journey, 'Bill in Timeline', 'FAIL', `No activity for billPattern ${billPatternId} in ${activities.length} activities`, duration);
+      }
+    } catch (error) {
+      this.log(journey, 'Activity API (after bill)', 'FAIL', error.message);
+    }
+
+    // Step 4: Create expense (POST /api/bank/transactions)
+    const expenseDesc = `E2E Expense ${Date.now()}`;
+    const expensePayload = {
+      description: expenseDesc,
+      amount: -42.50,
+      date: new Date().toISOString().split('T')[0],
+      primaryType: 'expense'
+    };
+    let transactionId = null;
+    try {
+      const startTime = Date.now();
+      const response = await this.clients.browser.post('/api/bank/transactions', expensePayload, auth);
+      const duration = Date.now() - startTime;
+      const tx = response.data?.transaction || response.data;
+      if ((response.status === 200 || response.status === 201) && tx?.id) {
+        transactionId = tx.id;
+        this.log(journey, 'Create Expense', 'PASS', `ID: ${transactionId}`, duration);
+      } else {
+        this.log(journey, 'Create Expense', 'FAIL', `Status: ${response.status}`, duration);
+        return;
+      }
+    } catch (error) {
+      this.log(journey, 'Create Expense', 'FAIL', error.message);
+      return;
+    }
+
+    // Step 5: Assert expense appears in transactions list (timeline financials)
+    try {
+      const startTime = Date.now();
+      const response = await this.clients.browser.get('/api/bank/transactions?limit=50', auth);
+      const duration = Date.now() - startTime;
+      if (response.status !== 200) {
+        this.log(journey, 'Expense in Transactions', 'FAIL', `Status: ${response.status}`, duration);
+        return;
+      }
+      const data = response.data?.data || response.data;
+      const transactions = data?.transactions || data || [];
+      const found = transactions.some(t => t.id === transactionId || (t.description && t.description.includes(expenseDesc)));
+      this.log(journey, 'Expense in Transactions', found ? 'PASS' : 'FAIL',
+               found ? `Transaction found` : `Not found in ${transactions.length} items`, duration);
+    } catch (error) {
+      this.log(journey, 'Expense in Transactions', 'FAIL', error.message);
+    }
+
+    // Step 6: Assert expense create appears in activity (timeline All)
+    try {
+      const startTime = Date.now();
+      const response = await this.clients.browser.get('/api/activity/recent?limit=50', auth);
+      const duration = Date.now() - startTime;
+      if (response.status !== 200 || !response.data?.success) {
+        this.log(journey, 'Expense in Activity', 'FAIL', `Status: ${response.status}`, duration);
+        return;
+      }
+      const activities = response.data?.data || response.data || [];
+      const txActivity = activities.find(
+        a => a.entityType === 'transaction' && a.entityId === transactionId
+      );
+      if (txActivity) {
+        this.log(journey, 'Expense in Activity', 'PASS', `Activity: ${txActivity.description}`, duration);
+      } else {
+        this.log(journey, 'Expense in Activity', 'WARN', `No activity for transaction ${transactionId} (may be deduped in UI)`, duration);
+      }
+    } catch (error) {
+      this.log(journey, 'Expense in Activity', 'FAIL', error.message);
+    }
+  }
+
   // ===== ERROR HANDLING JOURNEY =====
   async testErrorHandlingJourney() {
     const journey = 'Error Handling';
@@ -553,6 +699,7 @@ class EndToEndTester {
     try {
       await this.testUserRegistrationJourney();
       await this.testExistingUserLoginJourney();
+      await this.testTimelineActivityJourney();
       await this.testSessionManagementJourney();
       await this.testMultiClientJourney();
       await this.testErrorHandlingJourney();

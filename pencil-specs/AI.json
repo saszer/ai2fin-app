@@ -1,0 +1,30 @@
+{
+  "name": "AI",
+  "description": "Design spec for AI",
+  "components": [
+    "Box",
+    "Typography",
+    "Paper",
+    "List",
+    "ListItemButton",
+    "ListItemText",
+    "IconButton",
+    "Tooltip",
+    "Stack",
+    "Divider"
+  ],
+  "layout": {
+    "type": "Flex Layout",
+    "usesCards": true,
+    "usesBox": true,
+    "usesTypography": true
+  },
+  "recommendations": [
+    "Create a Frame with dimensions matching your viewport",
+    "Use Flex/Box for layout",
+    "Add Card components for content sections",
+    "Match Material-UI spacing (8px grid)",
+    "Use theme colors from your app"
+  ],
+  "filePath": "ai2-core-app\\client\\src\\pages\\AI.tsx"
+}

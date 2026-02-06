@@ -71,6 +71,11 @@ jobs:
           cd embracingearthspace/ai2-${{ matrix.service }}
           npm ci
       
+      - name: Security Audit
+        run: |
+          cd embracingearthspace/ai2-${{ matrix.service }}
+          npm audit --audit-level=high || true
+      
       - name: Lint
         run: |
           cd embracingearthspace/ai2-${{ matrix.service }}
