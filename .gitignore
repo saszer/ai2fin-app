@@ -87,6 +87,7 @@ helm/secrets/
 !.vscode/launch.json
 !.vscode/extensions.json
 .idea/
+.cursor/
 *.swp
 *.swo
 *~
@@ -246,28 +247,133 @@ desktop.ini
 .emacs.desktop.lock
 
 # ==================================
-# CUSTOM PROJECT EXCLUSIONS
+# PRIVATE SUBMODULES (tracked separately)
 # ==================================
-# Add project-specific patterns here 
-ai2-ai-modules/
 ai2-core-app/
+ai2-ai-modules/
 ai2-subscription-service/
-# TestSprite - Disabled
+
+# ==================================
+# INTERNAL / ENGINEERING DOCS
+# Prevent accidental commit of audit,
+# fix, architecture, and security docs.
+# Only keep: README.md, CONTRIBUTING.md,
+# CODE_OF_CONDUCT.md, SECURITY.md, LICENSE,
+# CHANGELOG.md
+# ==================================
+*_AUDIT*.md
+*_FIX*.md
+*_COMPLETE*.md
+*_SUMMARY*.md
+*ARCHITECTURE*.md
+*_IMPLEMENTATION*.md
+*_DEPLOYMENT*.md
+*_SETUP*.md
+*_GUIDE*.md
+COMPREHENSIVE_*.md
+ENTERPRISE_*.md
+SYSTEM_*.md
+CLUSTER_*.md
+INFORMATION_*.md
+RISK_*.md
+!README.md
+!CONTRIBUTING.md
+!CODE_OF_CONDUCT.md
+!SECURITY.md
+!CHANGELOG.md
+!LICENSE
+
+# ==================================
+# INFRASTRUCTURE & DEPLOY CONFIGS
+# ==================================
+fly.toml
+fly.*.toml
+env.*.template
+*.sql
+wazuh/
+
+# ==================================
+# SCREENSHOTS & IMAGES (use docs site)
+# ==================================
+Screenshot*.png
+screencapture-*.png
+
+# ==================================
+# TEST/DEBUG SCRIPTS (keep in core-app)
+# ==================================
+test-*.js
+test-*.sh
+test-*.ps1
+test-*.bat
+debug-*.js
+debug-*.ps1
+verify-*.js
+trace-*.js
+check-*.js
+check-*.ps1
+diagnose-*.js
+monitor-*.js
+force-*.js
+clear-*.js
+cleanup-*.js
+fix-*.js
+fix-*.ps1
+quick-*.js
+quick-*.ps1
+simple-*.js
+start-*.ps1
+start-*.sh
+setup-*.ps1
+setup-*.sh
+deploy-*.ps1
+deploy-*.sh
+build-*.ps1
+health-*.ps1
+memory-*.ps1
+memory-*.js
+deep-*.ps1
+emergency-*.ps1
+corrected-*.js
+corrected-*.ps1
+option-*.ps1
+init-*.ps1
+commit-*.ps1
+feature-*.ps1
+extract-*.js
+demo-*.ps1
+ai-*.ps1
+subscription-*.js
+performance-*.js
+endpoint-*.js
+real-*.js
+typescript-*.js
+watch-*.js
+create-test-*.js
+add-test-*.js
+add-test-*.sql
+
+# ==================================
+# INTERNAL PROTOTYPE / INFRA DIRS
+# ==================================
+refrences/
+pencil-specs/
 testsprite_tests/
 code_summary.json
-SECRET_ROTATION_GUIDE.md
-COMPREHENSIVE_SECURITY_AUDIT.md
-MONITORING_ALERTING_EXPLANATION.md
-SECRET_MAPPING_GUIDE.md
-WAZUH_BYPASS_ANALYSIS.md
-wazuh/DEPLOYMENT_READY.md
-wazuh/PRODUCTION_READINESS_AUDIT.md
-wazuh/HOW_TO_ACCESS.md
-wazuh/STARTUP_SEQUENCE_VERIFIED.md
-.gitignore
-wazuh/DEPLOYMENT_COMPLETE.md
-wazuh/FLY_MONITORING_QUICKSTART.md
-wazuh/MONITORING_GUIDE.md
-wazuh/ENV_VARIABLES_GUIDE.md
-wazuh/WAZUH_STATUS_REPORT.md
-WAZUH_CONNECTION_FIX.md
+infra/
+infrastructure/
+log-shipper/
+scripts/
+tests/
+dist/
+.agent/
+
+# ==================================
+# TEMP & MISC FILES
+# ==================================
+temp-*.csv
+test-*.csv
+test-*.json
+test-*.txt
+production-*.json
+*.har
+my.md

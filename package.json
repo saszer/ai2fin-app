@@ -18,8 +18,8 @@
     "start:all": "concurrently \"npm run start:core\" \"npm run start:services\"",
     "start:core": "cd ai2-core-app && npm start",
     "start:core:standalone": "cross-env ENABLE_AI=false ENABLE_SUBSCRIPTION=false ENABLE_ANALYTICS=false ENABLE_CONNECTORS=false ENABLE_NOTIFICATIONS=false npm run start:core",
-    "deploy:staging": "flyctl deploy --app ai2-staging",
-    "deploy:production": "flyctl deploy --app ai2-production",
+    "deploy:staging": "flyctl deploy --app $FLY_APP_STAGING",
+    "deploy:production": "flyctl deploy --app $FLY_APP_PRODUCTION",
     "start:services": "concurrently \"npm run start:subscription\" \"npm run start:ai\" \"npm run start:connectors\" \"npm run start:analytics\" \"npm run start:notifications\"",
     "start:subscription": "cd ai2-subscription-service && npm start",
     "start:ai": "cd ai2-ai-modules && npm run start",
@@ -27,7 +27,7 @@
     "start:analytics": "cd ai2-analytics && npm run start",
     "start:notifications": "cd ai2-notifications && npm run start",
     "start:premium": "cross-env ENABLE_AI=true ENABLE_SUBSCRIPTION=true ENABLE_ANALYTICS=true ENABLE_CONNECTORS=true ENABLE_NOTIFICATIONS=true npm run start:all",
-    "start:enterprise": "cross-env SCALING_PHASE=enterprise CLUSTER_MODE=true CLUSTER_WORKERS=8 ENABLE_AI=true ENABLE_SUBSCRIPTION=true ENABLE_ANALYTICS=true ENABLE_CONNECTORS=true ENABLE_NOTIFICATIONS=true ENABLE_MULTI_TENANT=true npm run start:all",
+    "start:enterprise": "cross-env SCALING_PHASE=enterprise CLUSTER_MODE=true ENABLE_AI=true ENABLE_SUBSCRIPTION=true ENABLE_ANALYTICS=true ENABLE_CONNECTORS=true ENABLE_NOTIFICATIONS=true ENABLE_MULTI_TENANT=true npm run start:all",
     "test:all": "npm run test:shared && npm run test:core && npm run test:modules",
     "test:shared": "cd shared && npm test",
     "test:core": "cd ai2-core-app && npm test",
@@ -57,12 +57,20 @@
     "clean:analytics": "cd ai2-analytics && npm run clean",
     "clean:notifications": "cd ai2-notifications && npm run clean",
     "setup:all": "npm install && npm run build:all",
-    "typecheck:all": "npm run typecheck --workspaces"
+    "typecheck:all": "npm run typecheck --workspaces",
+    "prefeature": "cd ai2-core-app && npm run prefeature",
+    "prefeature:quick": "cd ai2-core-app && npm run prefeature:quick",
+    "release:check": "cd ai2-core-app && npm run release:check",
+    "quick:check": "cd ai2-core-app && npm run quick:check",
+    "format": "cd ai2-core-app && npm run format",
+    "security:audit": "cd ai2-core-app && npm run security:audit",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.1",
     "concurrently": "^8.2.2",
-    "cross-env": "^7.0.3"
+    "cross-env": "^7.0.3",
+    "husky": "^9.1.7"
   },
   "workspaces": [
     "shared",

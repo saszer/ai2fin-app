@@ -183,7 +183,7 @@ app.get('/api/connectors/diagnostic/jwt-config', (req, res) => {
     message: jwtSecret
       ? 'JWT_SECRET is configured. Compare the hash with core app to verify they match.'
       : 'CRITICAL: JWT_SECRET is not configured!',
-    instructions: 'Run: fly secrets get JWT_SECRET -a ai2-core-api and compare with connectors service'
+    instructions: 'Compare the JWT_SECRET hash between core app and connectors service to verify they match'
   });
 });
 

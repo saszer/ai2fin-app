@@ -1,16 +1,40 @@
 #!/usr/bin/env sh
-# Pre-commit: enterprise secret scan (cross-platform)
-# Requires Node.js and Git available in PATH
 
-node scripts/secret-scan.js
-status=$?
-if [ $status -ne 0 ]; then
-  echo "\n❌ Pre-commit blocked: secret scan failed."
-  exit $status
+# ═══════════════════════════════════════════════════════════════════════
+# PRE-COMMIT HOOK — embracingearth.space (MONOREPO ROOT)
+#
+# Windows NVM compatibility: Use node directly to invoke lint-staged
+# because Git Bash can't resolve .cmd shims from NVM for Windows.
+# ═══════════════════════════════════════════════════════════════════════
+
+# Windows NVM PATH fix
+export PATH="$PATH:/c/nvm4w/nodejs:/c/Program Files/nodejs"
+[ -n "$APPDATA" ] && export PATH="$PATH:$APPDATA/nvm"
+[ -n "$NVM_SYMLINK" ] && export PATH="$PATH:$NVM_SYMLINK"
+
+# --- Phase 1: Secret scan (whole repo) ---
+if [ -f "scripts/secret-scan.js" ]; then
+  node scripts/secret-scan.js
+  status=$?
+  if [ $status -ne 0 ]; then
+    echo "❌ Pre-commit blocked: secret scan failed."
+    exit $status
+  fi
+fi
+
+# --- Phase 2: Core-app lint-staged (if core-app files changed) ---
+CORE_STAGED=$(git diff --cached --name-only -- ai2-core-app/)
+if [ -n "$CORE_STAGED" ]; then
+  echo "🔒 Core-app files staged — running lint-staged..."
+  cd ai2-core-app
+  node ./node_modules/.bin/lint-staged --concurrent false
+  LINT_STATUS=$?
+  cd ..
+  if [ $LINT_STATUS -ne 0 ]; then
+    echo "❌ Pre-commit blocked: core-app lint-staged failed."
+    exit $LINT_STATUS
+  fi
+  echo "✅ Core-app lint-staged passed"
 fi
 
 exit 0
-
-
-
-

@@ -78,7 +78,7 @@ export const authenticateToken = (req: AuthenticatedRequest, res: Response, next
       errorDetails.diagnosis = 'Token is not yet valid';
     } else if (error.message?.includes('invalid signature')) {
       errorDetails.jwtError = 'Invalid signature - JWT_SECRET mismatch';
-      errorDetails.diagnosis = 'CRITICAL: JWT_SECRET must match between ai2-core-api and ai2-connectors';
+      errorDetails.diagnosis = 'CRITICAL: JWT_SECRET must match between core app and connectors service';
     }
     
     // Always log full error details for debugging

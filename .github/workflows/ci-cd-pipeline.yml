@@ -13,6 +13,9 @@ env:
   GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  FLY_APP_STAGING: ${{ secrets.FLY_APP_STAGING }}
+  FLY_APP_PRODUCTION: ${{ secrets.FLY_APP_PRODUCTION }}
+  FLY_ORG: ${{ secrets.FLY_ORG }}
 
 jobs:
   # 1. Security Scanning
@@ -186,14 +189,10 @@ jobs:
       - name: Deploy preview app
         working-directory: ./embracingearthspace
         run: |
-          # embracingearth.space branding
-          export APP_NAME="ai2-pr-${{ github.event.pull_request.number }}"
-          flyctl apps create $APP_NAME --org embracingearth || true
-          
-          # Deploy with preview config - let Fly.io build from Dockerfile
+          export APP_NAME="${{ env.FLY_ORG }}-pr-${{ github.event.pull_request.number }}"
+          flyctl apps create $APP_NAME --org ${{ env.FLY_ORG }} || true
           flyctl deploy \
             --app $APP_NAME \
-            --config fly.preview.toml \
             --build-arg COMMIT_SHA=${{ github.sha }}
       
       - name: Comment PR with preview URL
@@ -204,7 +203,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `🚀 Preview deployed to: https://ai2-pr-${{ github.event.pull_request.number }}.fly.dev`
+              body: `Preview deployed for PR #${{ github.event.pull_request.number }}`
             })
 
   # 5. Deploy to Staging
@@ -223,10 +222,8 @@ jobs:
       - name: Deploy to staging
         working-directory: ./embracingearthspace
         run: |
-          # Let Fly.io build from Dockerfile instead of using pre-built image
           flyctl deploy \
-            --app ai2-staging \
-            --config fly.staging.toml
+            --app ${{ env.FLY_APP_STAGING }}
 
   # 6. Deploy to Production
   deploy-production:
@@ -244,11 +241,8 @@ jobs:
       - name: Deploy to production
         working-directory: ./embracingearthspace
         run: |
-          # embracingearth.space deployment
-          # Let Fly.io build from Dockerfile instead of using pre-built image
           flyctl deploy \
-            --app ai2-production \
-            --config fly.toml \
+            --app ${{ env.FLY_APP_PRODUCTION }} \
             --strategy rolling
 
   # 7. Cleanup PR Previews
@@ -262,4 +256,4 @@ jobs:
       
       - name: Destroy preview app
         run: |
-          flyctl apps destroy ai2-pr-${{ github.event.pull_request.number }} --yes 
+          flyctl apps destroy ${{ env.FLY_ORG }}-pr-${{ github.event.pull_request.number }} --yes 
