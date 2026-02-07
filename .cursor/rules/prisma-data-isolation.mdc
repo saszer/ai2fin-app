@@ -1,0 +1,77 @@
+---
+description: Prisma data isolation — userId in every query, IDOR prevention
+globs: ai2-core-app/src/**/*.ts
+alwaysApply: false
+---
+
+# Prisma Data Isolation Rules
+
+## EVERY Query Must Include userId
+
+User data is isolated by `userId`. Forgetting to filter is an IDOR vulnerability.
+
+### Read Operations
+
+```typescript
+// ❌ BAD — returns record regardless of who owns it
+const bill = await prisma.bill.findUnique({ where: { id } });
+
+// ✅ GOOD — only returns if user owns it
+const bill = await prisma.bill.findFirst({
+  where: { id, userId },
+});
+```
+
+### Update/Delete Operations — Defense in Depth
+
+Even if you verified ownership with findFirst, include userId in the mutation:
+
+```typescript
+// ❌ BAD — race condition if ownership changes between find and update
+const bill = await prisma.bill.findFirst({ where: { id, userId } });
+if (!bill) return res.status(404);
+await prisma.bill.update({ where: { id } }); // no userId!
+
+// ✅ GOOD — compound filter in mutation
+await prisma.bill.updateMany({
+  where: { id, userId },
+  data: { ... },
+});
+```
+
+For `update` (requires unique key), use a transaction:
+
+```typescript
+// ✅ GOOD — atomic ownership check + update
+await prisma.$transaction(async (tx) => {
+  const bill = await tx.bill.findFirst({ where: { id, userId } });
+  if (!bill) throw new Error('Not found or access denied');
+  return tx.bill.update({ where: { id }, data: { ... } });
+});
+```
+
+### Service Functions
+
+If a service accepts a record `id`, it MUST also accept `userId`:
+
+```typescript
+// ❌ BAD
+async getHistory(conversationId: string): Promise<Message[]>
+
+// ✅ GOOD
+async getHistory(conversationId: string, userId: string): Promise<Message[]>
+```
+
+## Error Handling — Never Swallow Access Denied
+
+```typescript
+// ❌ BAD — hides IDOR attacks
+} catch (error) { return []; }
+
+// ✅ GOOD — re-throw access errors
+} catch (error) {
+  if (error.message?.includes('access denied')) throw error;
+  logger.error('Failed', { error: error.message });
+  return [];
+}
+```

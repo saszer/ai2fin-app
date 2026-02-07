@@ -1,0 +1,75 @@
+---
+description: Security checklist for API routes — auth, data isolation, rate limiting
+globs: ai2-core-app/src/routes/**/*.ts
+alwaysApply: false
+---
+
+# Security Checklist for API Routes
+
+Every route handler that touches user data MUST follow these rules.
+
+## 1. Authentication
+
+All routes must use `authMiddleware` or be explicitly in the PUBLIC_PREFIXES list in `middleware/auth.ts`.
+
+```typescript
+// ❌ BAD — no auth
+router.get('/api/data', async (req, res) => { ... });
+
+// ✅ GOOD — auth enforced
+router.get('/api/data', authMiddleware, async (req, res) => {
+  const userId = (req as any).user?.id;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  ...
+});
+```
+
+## 2. Data Isolation (CRITICAL)
+
+EVERY Prisma query that reads/writes user data MUST include `userId` in the `where` clause.
+
+```typescript
+// ❌ BAD — IDOR vulnerability (any user can access any record by ID)
+const bill = await prisma.bill.findUnique({ where: { id: req.params.id } });
+
+// ✅ GOOD — ownership enforced in the query
+const bill = await prisma.bill.findUnique({
+  where: { id: req.params.id, userId },
+});
+```
+
+If using a service that takes a record ID, the service MUST verify ownership:
+
+```typescript
+// ❌ BAD — trusts conversationId from URL without ownership check
+const messages = await store.getHistory(conversationId, 50);
+
+// ✅ GOOD — passes userId for ownership verification
+const messages = await store.getHistory(conversationId, userId, 50);
+```
+
+## 3. Input Validation
+
+All user input must be validated before use:
+
+```typescript
+// ✅ Use Zod schemas or sanitizeXxx() from lib/inputSanitizer
+const { id } = sanitizeCuid(req.params.id);
+```
+
+## 4. Rate Limiting
+
+Do NOT add routes to `skipRoutes` in `advancedRateLimit.ts`. Only `/health` and `/api/health` should skip.
+
+## 5. Error Responses
+
+Never expose internal details in error responses:
+
+```typescript
+// ❌ BAD
+res.status(500).json({ error: error.message, stack: error.stack });
+
+// ✅ GOOD
+res.status(500).json({ error: 'Internal server error' });
+logger.error('Route failed', { error: error.message, path: req.path });
+```

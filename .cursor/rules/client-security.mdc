@@ -1,0 +1,51 @@
+---
+description: Client-side security rules — token storage, console.log, PII handling
+globs: ai2-core-app/client/src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Client-Side Security Rules
+
+## 1. Never Log Sensitive Data in Production
+
+```typescript
+// ❌ BAD — leaks token prefix, email, financial amounts
+console.log('Token:', token.substring(0, 20));
+console.log('User:', user.email);
+console.log('Amount:', transaction.amount);
+
+// ✅ GOOD — gate behind development check
+if (process.env.NODE_ENV === 'development') {
+  console.log('Debug info:', data);
+}
+```
+
+## 2. Never Decode JWT on Client for Business Logic
+
+The JWT payload is accessible to XSS. Use API calls instead.
+
+```typescript
+// ❌ BAD — exposes all claims to any injected script
+const payload = JSON.parse(atob(token.split('.')[1]));
+
+// ✅ GOOD — ask the server
+const { data } = await api.get('/api/auth/me');
+```
+
+## 3. localStorage Contains Tokens — Treat as Sensitive
+
+Anything in localStorage is readable by XSS. Never store more PII than necessary. Currently stored:
+- `token` — JWT (required for auth)
+- `user` — user object (minimize fields)
+
+When caching financial data, always scope by userId and set short TTL.
+
+## 4. No Hardcoded Emails or Credentials
+
+```typescript
+// ❌ BAD
+if (payload.email !== 'admin@company.com') { ... }
+
+// ✅ GOOD — use feature flags or server-side checks
+if (!user.isAdmin) { ... }
+```

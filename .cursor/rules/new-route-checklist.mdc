@@ -1,0 +1,44 @@
+---
+description: Mandatory checklist when creating or modifying API routes
+globs: ai2-core-app/src/routes/**/*.ts
+alwaysApply: false
+---
+
+# New/Modified Route Checklist
+
+Before submitting ANY route change, verify ALL of these:
+
+## Authentication
+- [ ] Route uses `authMiddleware` or `withUserProvisioning`
+- [ ] If intentionally public, it's listed in `PUBLIC_PREFIXES` in `auth.ts` with a comment explaining WHY
+- [ ] `userId` extracted from `req.user.id` (NEVER from `req.body` or `req.query`)
+
+## Data Isolation
+- [ ] Every Prisma query includes `userId` in `where` clause
+- [ ] `findUnique` → prefer `findFirst` with `userId` filter
+- [ ] `update`/`delete` operations verify ownership (ideally in the mutation itself)
+- [ ] Service calls pass `userId` explicitly (no implicit context)
+
+## Input Validation
+- [ ] All `req.params` IDs validated with `sanitizeCuid()` or similar
+- [ ] Request body validated with Zod schema or explicit checks
+- [ ] File uploads use size limits and path traversal protection
+
+## Rate Limiting
+- [ ] Route is NOT added to `skipRoutes` in `advancedRateLimit.ts`
+- [ ] Bulk/batch operations have their own stricter rate limit
+
+## Error Responses
+- [ ] Error responses do NOT include `error.message` or `error.stack`
+- [ ] Use generic message: `{ error: 'Internal server error' }`
+- [ ] Log detailed error server-side with `logger.error()`
+
+## Tests
+- [ ] Security test added to `__tests__/security/securityHardening.test.ts`
+- [ ] Route test added to `__tests__/routes/`
+- [ ] Data isolation tested (User A cannot access User B's data)
+
+## Debug Endpoints
+- [ ] Gated behind `process.env.NODE_ENV !== 'production'`
+- [ ] NOT added to `PUBLIC_PREFIXES`
+- [ ] NOT exposing internal state (request IDs, user fragments, etc.)
