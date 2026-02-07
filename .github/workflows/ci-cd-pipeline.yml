@@ -89,7 +89,11 @@ jobs:
       - name: Run tests
         run: |
           cd embracingearthspace/ai2-${{ matrix.service }}
-          npm test -- --passWithNoTests
+          npm test -- --ci --coverage
+        env:
+          NODE_ENV: test
+          JWT_SECRET: ci-test-secret-key
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
       
       - name: Build
         run: |

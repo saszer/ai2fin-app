@@ -18,6 +18,7 @@
 secrets/
 config/secrets/
 vault/
+test-api-key*
 **/credentials.json
 **/*-secret*
 **/*-credentials*
