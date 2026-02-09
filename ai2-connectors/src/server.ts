@@ -20,8 +20,11 @@ import connectorsRouter from './routes/connectors';
 import { realtimeTransactionService } from './services/RealtimeTransactionService';
 import './connectors/registerConnectors'; // Register all connectors on startup
 
-// Initialize Prisma for secure credential storage
+// Initialize Prisma for secure credential storage (uses client-connectors; run prisma generate in ai2-connectors)
 import { prisma } from './lib/prisma';
+if (typeof (prisma as any).connectorConnection?.findMany !== 'function') {
+  throw new Error('Connectors Prisma client missing connectorConnection model. Run: npx prisma generate in ai2-connectors');
+}
 // 🔒 Wazuh Security Monitoring - embracingearth.space
 import { wazuhRequestLogger, wazuhSecurityMiddleware, logSecurityEvent, wazuhLogger } from './utils/wazuh-logger';
 
@@ -46,10 +49,13 @@ const ORIGIN_LOCK_ENABLED = process.env.ENFORCE_CF_ORIGIN_LOCK === 'true';
 const ORIGIN_HEADER_NAME = (process.env.ORIGIN_HEADER_NAME || 'x-origin-auth').toLowerCase();
 const ORIGIN_SHARED_SECRET = process.env.ORIGIN_SHARED_SECRET || '';
 
-// Security validation
+// Security validation - in dev allow missing JWT_SECRET (warn only); production requires it
 if (!process.env.JWT_SECRET) {
-  console.error('CRITICAL: JWT_SECRET not configured for connectors service');
-  process.exit(1);
+  if (process.env.NODE_ENV === 'production') {
+    console.error('CRITICAL: JWT_SECRET not configured for connectors service');
+    process.exit(1);
+  }
+  console.warn('⚠️ JWT_SECRET not set - using dev fallback (connectors auth may fail until core app JWT_SECRET is shared)');
 }
 
 // Credential encryption validation
